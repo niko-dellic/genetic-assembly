@@ -1,8 +1,8 @@
-use wasm_bindgen::prelude::*;
-use serde::{Deserialize, Serialize};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
+use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct OptimizationSpec {
@@ -15,12 +15,15 @@ pub struct OptimizationSpec {
     pub num_offsprings: usize,
     pub objectives: Vec<Vec<f64>>, // coefficient matrix for objectives
     pub constraints: Option<Vec<Vec<f64>>>, // optional constraint matrix
+    pub initial_population: Option<Vec<Vec<f64>>>, // optional initial population (genes)
+    pub seed: Option<u64>,         // optional RNG seed for deterministic behavior
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct OptimizationResult {
     pub pareto: Vec<Vec<f64>>, // pareto front individuals
     pub stats: OptimizationStats,
+    pub full_population: Option<Vec<Vec<f64>>>, // full population for resuming (optional)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -158,7 +161,12 @@ fn tournament_selection<'a>(population: &'a [Individual], rng: &mut SmallRng) ->
 }
 
 /// Single-point crossover
-fn crossover(parent1: &Individual, parent2: &Individual, rate: f64, rng: &mut SmallRng) -> Individual {
+fn crossover(
+    parent1: &Individual,
+    parent2: &Individual,
+    rate: f64,
+    rng: &mut SmallRng,
+) -> Individual {
     if rng.gen::<f64>() > rate {
         return parent1.clone();
     }
@@ -210,23 +218,49 @@ fn run_nsga2(
     mutation_rate: f64,
     num_offsprings: usize,
     objective_matrix: Vec<Vec<f64>>,
+    initial_population: Option<Vec<Vec<f64>>>,
+    seed: Option<u64>,
 ) -> Vec<Individual> {
-    let mut rng = SmallRng::from_entropy();
+    let mut rng = if let Some(s) = seed {
+        SmallRng::seed_from_u64(s)
+    } else {
+        SmallRng::from_entropy()
+    };
 
-    // Initialize population
-    let mut population: Vec<Individual> = (0..pop_size)
-        .map(|_| {
-            let genes: Vec<f64> = (0..num_vars).map(|_| if rng.gen::<bool>() { 1.0 } else { 0.0 }).collect();
-            let mut ind = Individual {
-                genes,
-                objectives: Vec::new(),
-                rank: 0,
-                crowding_distance: 0.0,
-            };
-            evaluate(&mut ind, &objective_matrix);
-            ind
-        })
-        .collect();
+    // Initialize population (from provided or random)
+    let mut population: Vec<Individual> = if let Some(init_pop) = initial_population {
+        // Use provided initial population
+        init_pop
+            .into_iter()
+            .map(|genes| {
+                let mut ind = Individual {
+                    genes,
+                    objectives: Vec::new(),
+                    rank: 0,
+                    crowding_distance: 0.0,
+                };
+                evaluate(&mut ind, &objective_matrix);
+                ind
+            })
+            .collect()
+    } else {
+        // Generate random population
+        (0..pop_size)
+            .map(|_| {
+                let genes: Vec<f64> = (0..num_vars)
+                    .map(|_| if rng.gen::<bool>() { 1.0 } else { 0.0 })
+                    .collect();
+                let mut ind = Individual {
+                    genes,
+                    objectives: Vec::new(),
+                    rank: 0,
+                    crowding_distance: 0.0,
+                };
+                evaluate(&mut ind, &objective_matrix);
+                ind
+            })
+            .collect()
+    };
 
     // Main loop
     for _ in 0..num_iterations {
@@ -300,6 +334,8 @@ pub fn solve_json(spec_json: &str) -> Result<String, JsValue> {
         spec.mutation_rate,
         spec.num_offsprings,
         spec.objectives,
+        spec.initial_population,
+        spec.seed,
     );
 
     // Extract pareto front (rank 0)
@@ -309,6 +345,9 @@ pub fn solve_json(spec_json: &str) -> Result<String, JsValue> {
         .map(|ind| ind.genes.clone())
         .collect();
 
+    // Extract full population for potential resuming
+    let full_pop: Vec<Vec<f64>> = population.iter().map(|ind| ind.genes.clone()).collect();
+
     let result = OptimizationResult {
         pareto: pareto.clone(),
         stats: OptimizationStats {
@@ -316,6 +355,7 @@ pub fn solve_json(spec_json: &str) -> Result<String, JsValue> {
             population_size: spec.population_size,
             pareto_size: pareto.len(),
         },
+        full_population: Some(full_pop),
     };
 
     serde_json::to_string(&result)
@@ -339,23 +379,24 @@ pub fn solve_buffers(
     }
 
     let objective_matrix: Vec<Vec<f64>> = (0..objectives_rows)
-        .map(|i| {
-            objectives_ptr[i * objectives_cols..(i + 1) * objectives_cols].to_vec()
-        })
+        .map(|i| objectives_ptr[i * objectives_cols..(i + 1) * objectives_cols].to_vec())
         .collect();
 
     let population = run_nsga2(
         dims,
         pop_size,
         generations,
-        0.9,  // default crossover rate
-        0.1,  // default mutation rate
+        0.9, // default crossover rate
+        0.1, // default mutation rate
         (pop_size as f64 * 0.5) as usize,
         objective_matrix,
+        None, // no initial population
+        None, // no seed
     );
 
     // Flatten genes into Float64Array
-    Ok(population.iter().flat_map(|ind| ind.genes.clone()).collect())
+    Ok(population
+        .iter()
+        .flat_map(|ind| ind.genes.clone())
+        .collect())
 }
-
-

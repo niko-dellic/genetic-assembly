@@ -1,178 +1,322 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Genetic Assembly - NSGA-II Demo</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        .container {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-        }
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-        }
-        .controls {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .control-group {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: #333;
-        }
-        input, select {
-            padding: 8px;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        input:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: 600;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        button:hover:not(:disabled) {
-            transform: translateY(-2px);
-        }
-        button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .results {
-            margin-top: 30px;
-        }
-        .status {
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-            font-weight: 500;
-        }
-        .status.info {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-        .status.success {
-            background: #e8f5e9;
-            color: #388e3c;
-        }
-        .status.error {
-            background: #ffebee;
-            color: #c62828;
-        }
-        .pareto-front {
-            background: #f5f5f5;
-            padding: 15px;
-            border-radius: 6px;
-            overflow-x: auto;
-        }
-        .pareto-front pre {
-            margin: 0;
-            font-size: 12px;
-            white-space: pre-wrap;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px;
-            border-radius: 6px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-        .stat-label {
-            font-size: 12px;
-            opacity: 0.9;
-        }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
+      .container {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+      h1 {
+        color: #667eea;
+        margin-bottom: 10px;
+      }
+      .subtitle {
+        color: #666;
+        margin-bottom: 30px;
+      }
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+      .control-group {
+        display: flex;
+        flex-direction: column;
+      }
+      label {
+        font-weight: 600;
+        margin-bottom: 5px;
+        color: #333;
+      }
+      input,
+      select {
+        padding: 8px;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .results {
+        margin-top: 30px;
+      }
+      .status {
+        padding: 10px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+        font-weight: 500;
+      }
+      .status.info {
+        background: #e3f2fd;
+        color: #1976d2;
+      }
+      .status.success {
+        background: #e8f5e9;
+        color: #388e3c;
+      }
+      .status.error {
+        background: #ffebee;
+        color: #c62828;
+      }
+      .pareto-front {
+        background: #f5f5f5;
+        padding: 15px;
+        border-radius: 6px;
+        overflow-x: auto;
+      }
+      .pareto-front pre {
+        margin: 0;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+      }
+      .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 6px;
+        text-align: center;
+      }
+      .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 5px;
+      }
+      .stat-label {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+      .worker-grid {
+        margin-top: 20px;
+        margin-bottom: 20px;
+      }
+      .worker-status {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        margin-top: 10px;
+      }
+      .worker-card {
+        background: #f9f9f9;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .worker-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .worker-id {
+        font-weight: 600;
+        color: #333;
+      }
+      .worker-status {
+        font-size: 12px;
+        color: #666;
+      }
+      .worker-progress {
+        margin-top: 8px;
+      }
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        transition: width 0.3s ease;
+      }
+      .progress-text {
+        font-size: 11px;
+        color: #666;
+        margin-top: 4px;
+      }
+      .worker-error {
+        color: #c62828;
+        font-size: 11px;
+        margin-top: 8px;
+      }
+      .section-title {
+        font-weight: 600;
+        color: #667eea;
+        margin-top: 20px;
+        margin-bottom: 10px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>🧬 Genetic Assembly - NSGA-II Demo</h1>
-        <p class="subtitle">WebAssembly-powered Multi-Objective Optimization with Web Workers</p>
-        
-        <div class="controls">
-            <div class="control-group">
-                <label for="algorithm">Algorithm:</label>
-                <select id="algorithm">
-                    <option value="nsga2">NSGA-II</option>
-                    <option value="nsga3">NSGA-III</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label for="numVars">Number of Variables:</label>
-                <input type="number" id="numVars" value="5" min="2" max="20">
-            </div>
-            <div class="control-group">
-                <label for="popSize">Population Size:</label>
-                <input type="number" id="popSize" value="50" min="10" max="500">
-            </div>
-            <div class="control-group">
-                <label for="generations">Generations:</label>
-                <input type="number" id="generations" value="100" min="10" max="1000">
-            </div>
-            <div class="control-group">
-                <label for="crossoverRate">Crossover Rate:</label>
-                <input type="number" id="crossoverRate" value="0.9" min="0" max="1" step="0.1">
-            </div>
-            <div class="control-group">
-                <label for="mutationRate">Mutation Rate:</label>
-                <input type="number" id="mutationRate" value="0.1" min="0" max="1" step="0.05">
-            </div>
+      <h1>🧬 Genetic Assembly - Parallel NSGA-II Demo</h1>
+      <p class="subtitle">
+        WebAssembly-powered Multi-Objective Optimization with Parallel Island
+        Model
+      </p>
+
+      <div class="section-title">Algorithm Parameters</div>
+      <div class="controls">
+        <div class="control-group">
+          <label for="algorithm">Algorithm:</label>
+          <select id="algorithm">
+            <option value="nsga2">NSGA-II</option>
+            <option value="nsga3">NSGA-III</option>
+          </select>
         </div>
-        
-        <button id="runBtn" onclick="runOptimization()">Run Optimization</button>
-        
-        <div class="results" id="results" style="display: none;">
-            <div class="status" id="status"></div>
-            <div class="stats" id="stats"></div>
-            <div class="pareto-front">
-                <strong>Pareto Front Solutions:</strong>
-                <pre id="paretoOutput"></pre>
-            </div>
+        <div class="control-group">
+          <label for="numVars">Number of Variables:</label>
+          <input type="number" id="numVars" value="5" min="2" max="20" />
         </div>
+        <div class="control-group">
+          <label for="popSize">Population Size (per worker):</label>
+          <input type="number" id="popSize" value="50" min="10" max="500" />
+        </div>
+        <div class="control-group">
+          <label for="generations">Generations:</label>
+          <input
+            type="number"
+            id="generations"
+            value="100"
+            min="10"
+            max="1000"
+          />
+        </div>
+        <div class="control-group">
+          <label for="crossoverRate">Crossover Rate:</label>
+          <input
+            type="number"
+            id="crossoverRate"
+            value="0.9"
+            min="0"
+            max="1"
+            step="0.1"
+          />
+        </div>
+        <div class="control-group">
+          <label for="mutationRate">Mutation Rate:</label>
+          <input
+            type="number"
+            id="mutationRate"
+            value="0.1"
+            min="0"
+            max="1"
+            step="0.05"
+          />
+        </div>
+      </div>
+
+      <div class="section-title">Parallel Execution Settings</div>
+      <div class="controls">
+        <div class="control-group">
+          <label for="numWorkers">Number of Workers:</label>
+          <input type="number" id="numWorkers" min="1" max="16" />
+          <button
+            onclick="reinitializePool()"
+            style="margin-top: 5px; padding: 6px 12px; font-size: 12px"
+          >
+            Reinitialize
+          </button>
+        </div>
+        <div class="control-group">
+          <label for="migrationInterval"
+            >Migration Interval (generations):</label
+          >
+          <input
+            type="number"
+            id="migrationInterval"
+            value="20"
+            min="5"
+            max="100"
+          />
+        </div>
+        <div class="control-group">
+          <label for="migrationRate">Migration Rate:</label>
+          <input
+            type="number"
+            id="migrationRate"
+            value="0.1"
+            min="0.01"
+            max="0.5"
+            step="0.05"
+          />
+        </div>
+      </div>
+
+      <button id="runBtn" onclick="runOptimization()">
+        Run Parallel Optimization
+      </button>
+
+      <div class="worker-grid">
+        <div class="section-title">Worker Status</div>
+        <div class="worker-status" id="workerStatus">
+          <div style="color: #999; text-align: center; padding: 20px">
+            Initializing workers...
+          </div>
+        </div>
+      </div>
+
+      <div class="results" id="results" style="display: none">
+        <div class="status" id="status"></div>
+        <div class="stats" id="stats"></div>
+        <div class="pareto-front">
+          <strong>Pareto Front Solutions:</strong>
+          <pre id="paretoOutput"></pre>
+        </div>
+      </div>
     </div>
-    
+
+    <script>
+      // Set default number of workers based on hardware
+      document.addEventListener("DOMContentLoaded", () => {
+        const numWorkersInput = document.getElementById("numWorkers");
+        numWorkersInput.value = navigator.hardwareConcurrency || 4;
+      });
+    </script>
+
     <script type="module" src="/src/main.ts"></script>
-</body>
+  </body>
 </html>

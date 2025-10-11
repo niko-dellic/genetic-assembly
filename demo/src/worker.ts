@@ -2,6 +2,7 @@
 import init, { solve_json } from "../../pkg/genetic_assembly.js";
 
 let isInitialized = false;
+let workerId = 0;
 
 self.onmessage = async (e) => {
   const { type, payload } = e.data;
@@ -10,6 +11,8 @@ self.onmessage = async (e) => {
     try {
       await init();
       isInitialized = true;
+      workerId = e.data.workerId || 0;
+      console.log(`Worker ${workerId} initialized`);
       self.postMessage({ type: "INIT_SUCCESS" });
     } catch (error) {
       self.postMessage({
