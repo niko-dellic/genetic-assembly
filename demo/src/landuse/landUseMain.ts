@@ -1,8 +1,8 @@
 // Main logic for land use allocation optimizer demo
 
 import Plotly from "plotly.js-dist";
-import init, { solve_json } from "../../pkg/index.js";
-import type { OptimizationSpec } from "./types.js";
+import init, { solve_json } from "../../../pkg/index.js";
+import type { OptimizationSpec } from "../types/types.js";
 import {
   createExampleProblem,
   buildObjectiveMatrices,
@@ -15,7 +15,7 @@ import {
   drawUtilizationHeatmap,
   drawParetoFront,
   drawCapacityVsDemand,
-} from "./visualization.js";
+} from "../visualization.js";
 
 let wasmInitialized = false;
 let currentProblem: LandUseProblem = createExampleProblem();

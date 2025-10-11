@@ -5,7 +5,7 @@ import type {
   LandUseSolution,
   LandUseProblem,
   UtilizationMetrics,
-} from "./landUseOptimizer.js";
+} from "./landuse/landUseOptimizer.js";
 
 /**
  * Create a pie chart showing area allocation

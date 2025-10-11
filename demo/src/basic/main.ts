@@ -1,6 +1,6 @@
 // Main TypeScript file for the demo
-import init, { solve_json } from "../../pkg/index.js";
-import type { OptimizationSpec, OptimizationResult } from "./types.js";
+import init, { solve_json } from "../../../pkg/index.js";
+import type { OptimizationSpec, OptimizationResult } from "../types/types.js";
 
 let startTime = 0;
 let wasmInitialized = false;
