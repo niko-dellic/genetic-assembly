@@ -7,9 +7,16 @@
     "build:wasm": "wasm-pack build --target web",
     "dev": "vite",
     "build": "npm run build:wasm && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
   },
-  "keywords": ["wasm", "genetic-algorithm", "nsga2", "nsga3", "multi-objective-optimization"],
+  "keywords": [
+    "wasm",
+    "genetic-algorithm",
+    "nsga2",
+    "nsga3",
+    "multi-objective-optimization"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {

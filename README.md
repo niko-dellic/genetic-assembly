@@ -15,6 +15,7 @@ WebAssembly wrapper for NSGA-II/III multi-objective genetic algorithms with Web 
 This project provides a custom WebAssembly-compatible implementation of the NSGA-II (Non-dominated Sorting Genetic Algorithm II) algorithm. While inspired by the [moors](https://github.com/andresliszt/moo-rs/) library's approach to multi-objective optimization, we implemented a standalone version that compiles to WebAssembly without dependency conflicts.
 
 The implementation includes:
+
 - Fast non-dominated sorting for Pareto front identification
 - Crowding distance calculation for solution diversity
 - Binary tournament selection
@@ -38,6 +39,9 @@ cargo install wasm-pack
 # Build the WASM package
 npm run build:wasm
 
+# Install node packages
+npm i
+
 # Run the demo
 npm run dev
 ```
@@ -53,9 +57,11 @@ The package exports two main functions for solving multi-objective optimization 
 Solves a multi-objective optimization problem using a JSON specification.
 
 **Parameters:**
+
 - `spec`: JSON string containing the optimization specification
 
 **Specification Format:**
+
 ```typescript
 {
   algorithm: "nsga2" | "nsga3",      // Algorithm to use
@@ -71,6 +77,7 @@ Solves a multi-objective optimization problem using a JSON specification.
 ```
 
 **Returns:**
+
 ```typescript
 {
   pareto: number[][],                 // Pareto front solutions
@@ -83,8 +90,9 @@ Solves a multi-objective optimization problem using a JSON specification.
 ```
 
 **Example:**
+
 ```typescript
-import init, { solve_json } from './pkg/genetic_assembly.js';
+import init, { solve_json } from "./pkg/genetic_assembly.js";
 
 await init();
 
@@ -97,16 +105,16 @@ const spec = {
   mutation_rate: 0.1,
   num_offsprings: 50,
   objectives: [
-    [-4, -2, -1, -5, -3],  // Objective 1 (maximize value, so negative)
-    [12, 2, 1, 4, 10]       // Objective 2 (minimize weight)
-  ]
+    [-4, -2, -1, -5, -3], // Objective 1 (maximize value, so negative)
+    [12, 2, 1, 4, 10], // Objective 2 (minimize weight)
+  ],
 };
 
 const resultJson = solve_json(JSON.stringify(spec));
 const result = JSON.parse(resultJson);
 
-console.log('Pareto front:', result.pareto);
-console.log('Statistics:', result.stats);
+console.log("Pareto front:", result.pareto);
+console.log("Statistics:", result.stats);
 ```
 
 #### `solve_buffers(x0?, dims, objectives, rows, cols, popSize, generations): Float64Array`
@@ -114,6 +122,7 @@ console.log('Statistics:', result.stats);
 Solves a multi-objective optimization problem using typed arrays.
 
 **Parameters:**
+
 - `x0`: Optional initial population (Float64Array or null)
 - `dims`: Number of decision variables
 - `objectives`: Flattened objective coefficient matrix (Float64Array)
@@ -125,28 +134,37 @@ Solves a multi-objective optimization problem using typed arrays.
 **Returns:** Float64Array containing the flattened genes of the final population
 
 **Example:**
+
 ```typescript
-import init, { solve_buffers } from './pkg/genetic_assembly.js';
+import init, { solve_buffers } from "./pkg/genetic_assembly.js";
 
 await init();
 
 const dims = 5;
 const objectives = new Float64Array([
-  -4, -2, -1, -5, -3,  // Objective 1
-  12, 2, 1, 4, 10      // Objective 2
+  -4,
+  -2,
+  -1,
+  -5,
+  -3, // Objective 1
+  12,
+  2,
+  1,
+  4,
+  10, // Objective 2
 ]);
 
 const result = solve_buffers(
-  null,           // No initial population
-  dims,           // 5 variables
-  objectives,     // Objective matrix
-  2,              // 2 objectives
-  5,              // 5 variables
-  100,            // Population size
-  200             // Generations
+  null, // No initial population
+  dims, // 5 variables
+  objectives, // Objective matrix
+  2, // 2 objectives
+  5, // 5 variables
+  100, // Population size
+  200 // Generations
 );
 
-console.log('Result:', result);
+console.log("Result:", result);
 ```
 
 ### Web Worker Integration
@@ -155,31 +173,31 @@ The demo includes a Web Worker implementation for running optimization in a back
 
 ```typescript
 // worker.ts
-import init, { solve_json } from '../../pkg/genetic_assembly.js';
+import init, { solve_json } from "../../pkg/genetic_assembly.js";
 
 let isInitialized = false;
 
 self.onmessage = async (e) => {
   const { type, payload } = e.data;
 
-  if (type === 'INIT') {
+  if (type === "INIT") {
     await init();
     isInitialized = true;
-    self.postMessage({ type: 'INIT_SUCCESS' });
+    self.postMessage({ type: "INIT_SUCCESS" });
     return;
   }
 
-  if (type === 'SOLVE') {
+  if (type === "SOLVE") {
     if (!isInitialized) {
-      self.postMessage({ type: 'ERROR', error: 'Not initialized' });
+      self.postMessage({ type: "ERROR", error: "Not initialized" });
       return;
     }
 
     try {
       const result = solve_json(JSON.stringify(payload));
-      self.postMessage({ type: 'SOLVE_SUCCESS', result: JSON.parse(result) });
+      self.postMessage({ type: "SOLVE_SUCCESS", result: JSON.parse(result) });
     } catch (error) {
-      self.postMessage({ type: 'ERROR', error: error.message });
+      self.postMessage({ type: "ERROR", error: error.message });
     }
   }
 };
@@ -229,6 +247,7 @@ The algorithm optimizes multiple conflicting objectives simultaneously. For exam
 ## Examples
 
 See [examples.js](./examples.js) for comprehensive usage examples including:
+
 - Basic usage with `solve_json` and `solve_buffers` APIs
 - Web Worker integration for non-blocking optimization
 - Real-world portfolio optimization example
@@ -284,4 +303,3 @@ MIT
 ## Acknowledgments
 
 This project provides a WebAssembly wrapper inspired by the [moors](https://github.com/andresliszt/moo-rs/) genetic algorithm library, implementing NSGA-II for multi-objective optimization in the browser.
-
