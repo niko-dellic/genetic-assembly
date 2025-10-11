@@ -10,6 +10,17 @@ WebAssembly wrapper for NSGA-II/III multi-objective genetic algorithms with Web 
 - 📦 **TypeScript APIs**: Fully typed interfaces for easy integration
 - 🎯 **Two API Styles**: JSON-based and buffer-based APIs
 
+## Implementation
+
+This project provides a custom WebAssembly-compatible implementation of the NSGA-II (Non-dominated Sorting Genetic Algorithm II) algorithm. While inspired by the [moors](https://github.com/andresliszt/moo-rs/) library's approach to multi-objective optimization, we implemented a standalone version that compiles to WebAssembly without dependency conflicts.
+
+The implementation includes:
+- Fast non-dominated sorting for Pareto front identification
+- Crowding distance calculation for solution diversity
+- Binary tournament selection
+- Single-point crossover and bit-flip mutation operators
+- Support for binary decision variables
+
 ## Installation
 
 ### Prerequisites
@@ -34,6 +45,8 @@ npm run dev
 ## API Reference
 
 ### TypeScript API
+
+The package exports two main functions for solving multi-objective optimization problems:
 
 #### `solve_json(spec: string): string`
 
@@ -212,6 +225,13 @@ The algorithm optimizes multiple conflicting objectives simultaneously. For exam
 - **Knapsack Problem**: Maximize value while minimizing weight
 - **Engineering Design**: Minimize cost while maximizing performance
 - **Portfolio Optimization**: Maximize returns while minimizing risk
+
+## Examples
+
+See [examples.js](./examples.js) for comprehensive usage examples including:
+- Basic usage with `solve_json` and `solve_buffers` APIs
+- Web Worker integration for non-blocking optimization
+- Real-world portfolio optimization example
 
 ## Development
 
