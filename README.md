@@ -48,6 +48,49 @@ npm i
 npm run dev
 ```
 
+The demo includes two examples:
+
+- **Parallel NSGA-II Demo** (`index.html`) - General-purpose multi-objective optimization
+- **Land Use Optimizer** (`landuse.html`) - Real-world example optimizing building space allocation
+
+## Demo Examples
+
+### 1. Parallel NSGA-II Demo
+
+A general-purpose demonstration of the parallel island model genetic algorithm. Access at `http://localhost:3001/`
+
+**Features:**
+
+- Configure algorithm parameters (population size, generations, mutation rates)
+- Adjust parallel execution settings (worker count, migration intervals)
+- Real-time worker status monitoring
+- View Pareto front solutions
+
+### 2. Land Use Allocation Optimizer
+
+A real-world application that optimizes building space allocation across different land uses (Restaurant, Residential, Retail) to balance occupancy and minimize overcrowding. Access at `http://localhost:3001/landuse.html`
+
+**Problem:**
+
+- Given a fixed total building area
+- Multiple land uses with different capacity requirements
+- Varying demand patterns across time periods (morning, afternoon, evening)
+- Find optimal area allocation that minimizes both overcrowding and underutilization
+
+**Objectives:**
+
+1. **Minimize Overcrowding**: Penalty when demand exceeds capacity
+2. **Minimize Underutilization**: Penalty when capacity significantly exceeds demand
+
+**Visualizations:**
+
+- Pie chart showing area allocation across land uses
+- Utilization heatmap (land use × time period)
+- Pareto front showing trade-offs between objectives
+- Capacity vs demand comparison charts
+
+This example demonstrates how to apply NSGA-II to real-world resource allocation problems with multiple competing objectives.
+
 ## Parallel Island Model
 
 The demo application now includes a **parallel island model** implementation that distributes optimization across multiple CPU cores using Web Workers.

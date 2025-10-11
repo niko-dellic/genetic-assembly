@@ -20,7 +20,11 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@types/plotly.js": "^3.0.6",
     "typescript": "^5.9.3",
     "vite": "^7.1.9"
+  },
+  "dependencies": {
+    "plotly.js-dist": "^3.1.1"
   }
 }

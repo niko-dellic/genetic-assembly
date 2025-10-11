@@ -4,121 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Genetic Assembly - NSGA-II Demo</title>
+    <link rel="stylesheet" href="/styles/styles.css" />
     <style>
-      :root {
-        --primary-color: #667eea;
-        --secondary-color: #764ba2;
-        --text-color: #e0e0e0;
-        --text-color-muted: #999;
-        --background-color: #1f1f1f;
-        --background-color-light: #2a2a2a;
-        --border-color: #3a3a3a;
-        --border-color-focus: #667eea;
-      }
-
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Oxygen, Ubuntu, sans-serif;
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 20px;
-        background: linear-gradient(135deg, #4a4a4a 0%, #0d0d0d 100%);
-        min-height: 100vh;
-      }
-      .container {
-        background: rgb(31, 31, 31);
-        border-radius: 12px;
-        padding: 30px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      }
-      h1 {
-        color: var(--primary-color);
-        margin-bottom: 10px;
-      }
-      .subtitle {
-        color: var(--text-color);
-        margin-bottom: 30px;
-      }
-      .controls {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 15px;
-        margin-bottom: 20px;
-      }
-      .control-group {
-        display: flex;
-        flex-direction: column;
-      }
-      label {
-        font-size: 12px;
-        margin-bottom: 5px;
-        color: var(--text-color);
-      }
-      input,
-      select {
-        padding: 8px;
-        border: 2px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 12px;
-        background-color: var(--background-color-light);
-        color: var(--text-color);
-        transition: border-color 0.2s ease;
-      }
-      input:focus,
-      select:focus {
-        outline: none;
-        border-color: var(--border-color-focus);
-      }
-      select option {
-        background-color: var(--background-color);
-        color: var(--text-color);
-      }
-      button {
-        background: linear-gradient(
-          135deg,
-          var(--primary-color) 0%,
-          var(--secondary-color) 100%
-        );
-        color: white;
-        border: none;
-        padding: 12px 24px;
-        font-size: 16px;
-        font-weight: 600;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: transform 0.2s;
-      }
-      button:hover:not(:disabled) {
-        transform: translateY(-2px);
-      }
-      button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-      .results {
-        margin-top: 30px;
-      }
-      .status {
-        padding: 10px;
-        border-radius: 6px;
-        margin-bottom: 15px;
-        font-weight: 500;
-      }
-      .status.info {
-        background: rgba(102, 126, 234, 0.2);
-        color: #8fa4f3;
-        border: 1px solid rgba(102, 126, 234, 0.4);
-      }
-      .status.success {
-        background: rgba(76, 175, 80, 0.2);
-        color: #81c784;
-        border: 1px solid rgba(76, 175, 80, 0.4);
-      }
-      .status.error {
-        background: rgba(244, 67, 54, 0.2);
-        color: #e57373;
-        border: 1px solid rgba(244, 67, 54, 0.4);
-      }
+      /* Page-specific styles */
       .pareto-front {
         background: var(--background-color-light);
         padding: 15px;
@@ -134,15 +22,18 @@
         white-space: pre-wrap;
         color: var(--text-color);
       }
+
       .pareto-front strong {
         color: var(--text-color);
       }
+
       .stats {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 15px;
         margin-top: 15px;
       }
+
       .stat-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -150,79 +41,25 @@
         border-radius: 6px;
         text-align: center;
       }
+
       .stat-value {
         font-size: 24px;
         font-weight: 700;
         margin-bottom: 5px;
       }
+
       .stat-label {
         font-size: 12px;
         opacity: 0.9;
-      }
-      .worker-grid {
-        margin-top: 20px;
-        margin-bottom: 20px;
-      }
-      .worker-status {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 15px;
-      }
-      .worker-card {
-        background: var(--background-color-light);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 12px;
-      }
-      .worker-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-      }
-      .worker-id {
-        white-space: nowrap;
-        color: var(--text-color);
-      }
-      .worker-status {
-        font-size: 12px;
-        color: var(--text-color);
-      }
-      .worker-progress {
-        margin-top: 8px;
-      }
-      .progress-bar {
-        width: 100%;
-        height: 8px;
-        background: var(--background-color);
-        border-radius: 4px;
-        overflow: hidden;
-      }
-      .progress-fill {
-        height: 100%;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        transition: width 0.3s ease;
-      }
-      .progress-text {
-        font-size: 11px;
-        color: var(--text-color-muted);
-        margin-top: 4px;
-      }
-      .worker-error {
-        color: #ef5350;
-        font-size: 11px;
-        margin-top: 8px;
-      }
-      .section-title {
-        font-weight: 600;
-        color: var(--primary-color);
-        margin-top: 20px;
-        margin-bottom: 10px;
       }
     </style>
   </head>
   <body>
     <div class="container">
+      <a href="landuse.html" class="nav-link"
+        >🏢 Land Use Optimizer Example →</a
+      >
+
       <h1>🧬 Genetic Assembly - Parallel NSGA-II Demo</h1>
       <p class="subtitle">
         WebAssembly-powered Multi-Objective Optimization with Parallel Island
