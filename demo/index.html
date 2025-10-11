@@ -5,27 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Genetic Assembly - NSGA-II Demo</title>
     <style>
+      :root {
+        --primary-color: #667eea;
+        --secondary-color: #764ba2;
+        --text-color: #e0e0e0;
+        --text-color-muted: #999;
+        --background-color: #1f1f1f;
+        --background-color-light: #2a2a2a;
+        --border-color: #3a3a3a;
+        --border-color-focus: #667eea;
+      }
+
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           Oxygen, Ubuntu, sans-serif;
         max-width: 1200px;
         margin: 0 auto;
         padding: 20px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #4a4a4a 0%, #0d0d0d 100%);
         min-height: 100vh;
       }
       .container {
-        background: white;
+        background: rgb(31, 31, 31);
         border-radius: 12px;
         padding: 30px;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
       }
       h1 {
-        color: #667eea;
+        color: var(--primary-color);
         margin-bottom: 10px;
       }
       .subtitle {
-        color: #666;
+        color: var(--text-color);
         margin-bottom: 30px;
       }
       .controls {
@@ -39,24 +50,35 @@
         flex-direction: column;
       }
       label {
-        font-weight: 600;
+        font-size: 12px;
         margin-bottom: 5px;
-        color: #333;
+        color: var(--text-color);
       }
       input,
       select {
         padding: 8px;
-        border: 2px solid #e0e0e0;
+        border: 2px solid var(--border-color);
         border-radius: 6px;
-        font-size: 14px;
+        font-size: 12px;
+        background-color: var(--background-color-light);
+        color: var(--text-color);
+        transition: border-color 0.2s ease;
       }
       input:focus,
       select:focus {
         outline: none;
-        border-color: #667eea;
+        border-color: var(--border-color-focus);
+      }
+      select option {
+        background-color: var(--background-color);
+        color: var(--text-color);
       }
       button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(
+          135deg,
+          var(--primary-color) 0%,
+          var(--secondary-color) 100%
+        );
         color: white;
         border: none;
         padding: 12px 24px;
@@ -83,27 +105,37 @@
         font-weight: 500;
       }
       .status.info {
-        background: #e3f2fd;
-        color: #1976d2;
+        background: rgba(102, 126, 234, 0.2);
+        color: #8fa4f3;
+        border: 1px solid rgba(102, 126, 234, 0.4);
       }
       .status.success {
-        background: #e8f5e9;
-        color: #388e3c;
+        background: rgba(76, 175, 80, 0.2);
+        color: #81c784;
+        border: 1px solid rgba(76, 175, 80, 0.4);
       }
       .status.error {
-        background: #ffebee;
-        color: #c62828;
+        background: rgba(244, 67, 54, 0.2);
+        color: #e57373;
+        border: 1px solid rgba(244, 67, 54, 0.4);
       }
       .pareto-front {
-        background: #f5f5f5;
+        background: var(--background-color-light);
         padding: 15px;
         border-radius: 6px;
         overflow-x: auto;
+        border: 1px solid var(--border-color);
+        margin-top: 15px;
       }
+
       .pareto-front pre {
         margin: 0;
         font-size: 12px;
         white-space: pre-wrap;
+        color: var(--text-color);
+      }
+      .pareto-front strong {
+        color: var(--text-color);
       }
       .stats {
         display: grid;
@@ -135,11 +167,10 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
         gap: 15px;
-        margin-top: 10px;
       }
       .worker-card {
-        background: #f9f9f9;
-        border: 2px solid #e0e0e0;
+        background: var(--background-color-light);
+        border: 1px solid var(--border-color);
         border-radius: 8px;
         padding: 12px;
       }
@@ -150,12 +181,12 @@
         margin-bottom: 8px;
       }
       .worker-id {
-        font-weight: 600;
-        color: #333;
+        white-space: nowrap;
+        color: var(--text-color);
       }
       .worker-status {
         font-size: 12px;
-        color: #666;
+        color: var(--text-color);
       }
       .worker-progress {
         margin-top: 8px;
@@ -163,7 +194,7 @@
       .progress-bar {
         width: 100%;
         height: 8px;
-        background: #e0e0e0;
+        background: var(--background-color);
         border-radius: 4px;
         overflow: hidden;
       }
@@ -174,17 +205,17 @@
       }
       .progress-text {
         font-size: 11px;
-        color: #666;
+        color: var(--text-color-muted);
         margin-top: 4px;
       }
       .worker-error {
-        color: #c62828;
+        color: #ef5350;
         font-size: 11px;
         margin-top: 8px;
       }
       .section-title {
         font-weight: 600;
-        color: #667eea;
+        color: var(--primary-color);
         margin-top: 20px;
         margin-bottom: 10px;
       }
@@ -212,7 +243,7 @@
           <input type="number" id="numVars" value="5" min="2" max="20" />
         </div>
         <div class="control-group">
-          <label for="popSize">Population Size (per worker):</label>
+          <label for="popSize">Size (Per Worker):</label>
           <input type="number" id="popSize" value="50" min="10" max="500" />
         </div>
         <div class="control-group">
@@ -254,12 +285,6 @@
         <div class="control-group">
           <label for="numWorkers">Number of Workers:</label>
           <input type="number" id="numWorkers" min="1" max="16" />
-          <button
-            onclick="reinitializePool()"
-            style="margin-top: 5px; padding: 6px 12px; font-size: 12px"
-          >
-            Reinitialize
-          </button>
         </div>
         <div class="control-group">
           <label for="migrationInterval"
@@ -286,6 +311,8 @@
         </div>
       </div>
 
+      <button onclick="reinitializePool()">Reinitialize</button>
+
       <button id="runBtn" onclick="runOptimization()">
         Run Parallel Optimization
       </button>
@@ -293,7 +320,13 @@
       <div class="worker-grid">
         <div class="section-title">Worker Status</div>
         <div class="worker-status" id="workerStatus">
-          <div style="color: #999; text-align: center; padding: 20px">
+          <div
+            style="
+              color: var(--text-color-muted);
+              text-align: center;
+              padding: 20px;
+            "
+          >
             Initializing workers...
           </div>
         </div>

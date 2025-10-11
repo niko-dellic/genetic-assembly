@@ -100,7 +100,7 @@ function updateWorkerStatusDisplay(statuses: WorkerStatus[]) {
         <div class="worker-card">
           <div class="worker-header">
             <span class="worker-id">Worker ${status.id + 1}</span>
-            <span class="worker-status">${statusEmoji} ${status.status}</span>
+            <span >${status.status} ${statusEmoji}</span>
           </div>
           <div class="worker-progress">
             <div class="progress-bar">
