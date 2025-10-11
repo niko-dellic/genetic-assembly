@@ -1,5 +1,6 @@
 // Worker script for running WASM optimization
-import init, { solve_json } from "../../pkg/genetic_assembly.js";
+import init, { solve_json } from "../../pkg/index.js";
+import type { OptimizationSpec } from "./types.js";
 
 let isInitialized = false;
 let workerId = 0;
@@ -34,15 +35,34 @@ self.onmessage = async (e) => {
 
     try {
       const startTime = performance.now();
-      const resultJson = solve_json(JSON.stringify(payload));
+
+      // Define progress callback that forwards to main thread with worker ID
+      const progressCallback = payload.progress_interval
+        ? (progressData: any) => {
+            // Add workerId to the progress data
+            const dataWithWorkerId = {
+              ...progressData,
+              workerId: workerId,
+            };
+            self.postMessage({
+              type: "PROGRESS",
+              workerId: workerId,
+              data: dataWithWorkerId,
+            });
+          }
+        : undefined;
+
+      // Call WASM solve_json with progress callback (payload is passed directly as JS object)
+      const result = solve_json(payload as OptimizationSpec, progressCallback);
       const endTime = performance.now();
 
-      const result = JSON.parse(resultJson);
-      result.executionTime = Math.round(endTime - startTime);
-
+      // Add execution time to result and send
       self.postMessage({
         type: "SOLVE_SUCCESS",
-        result,
+        result: {
+          ...result,
+          executionTime: Math.round(endTime - startTime),
+        },
       });
     } catch (error) {
       self.postMessage({

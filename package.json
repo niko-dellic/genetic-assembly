@@ -4,7 +4,7 @@
   "description": "WebAssembly port of moors (NSGA-II/III) genetic algorithms",
   "type": "module",
   "scripts": {
-    "build:wasm": "wasm-pack build --target web",
+    "build:wasm": "wasm-pack build --target web --out-dir pkg --release",
     "dev": "vite",
     "build": "npm run build:wasm && vite build",
     "preview": "vite preview",

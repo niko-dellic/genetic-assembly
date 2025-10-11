@@ -17,6 +17,7 @@ pub struct OptimizationSpec {
     pub constraints: Option<Vec<Vec<f64>>>, // optional constraint matrix
     pub initial_population: Option<Vec<Vec<f64>>>, // optional initial population (genes)
     pub seed: Option<u64>,         // optional RNG seed for deterministic behavior
+    pub progress_interval: Option<usize>, // optional: callback every N generations
 }
 
 #[derive(Serialize, Deserialize)]
@@ -31,6 +32,22 @@ pub struct OptimizationStats {
     pub iterations: usize,
     pub population_size: usize,
     pub pareto_size: usize,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct IndividualData {
+    pub genes: Vec<f64>,
+    pub objectives: Vec<f64>,
+    pub rank: usize,
+    pub crowding_distance: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ProgressData {
+    pub generation: usize,
+    pub pareto_front: Vec<IndividualData>,
+    pub pareto_size: usize,
+    pub population_size: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -220,6 +237,8 @@ fn run_nsga2(
     objective_matrix: Vec<Vec<f64>>,
     initial_population: Option<Vec<Vec<f64>>>,
     seed: Option<u64>,
+    progress_callback: Option<js_sys::Function>,
+    progress_interval: usize,
 ) -> Vec<Individual> {
     let mut rng = if let Some(s) = seed {
         SmallRng::seed_from_u64(s)
@@ -263,7 +282,7 @@ fn run_nsga2(
     };
 
     // Main loop
-    for _ in 0..num_iterations {
+    for generation in 0..num_iterations {
         // Generate offspring
         let mut offspring = Vec::with_capacity(num_offsprings);
         for _ in 0..num_offsprings {
@@ -308,16 +327,50 @@ fn run_nsga2(
         }
 
         population = next_population;
+
+        // Progress callback
+        if let Some(callback) = &progress_callback {
+            if generation % progress_interval == 0 || generation == num_iterations - 1 {
+                let progress_data = create_progress_data(generation, &population);
+                let _ = callback.call1(&JsValue::NULL, &progress_data);
+            }
+        }
     }
 
     population
 }
 
-/// Solve optimization problem from JSON specification
+/// Create progress data for callback
+fn create_progress_data(generation: usize, population: &[Individual]) -> JsValue {
+    let pareto_front: Vec<IndividualData> = population
+        .iter()
+        .filter(|ind| ind.rank == 0)
+        .map(|ind| IndividualData {
+            genes: ind.genes.clone(),
+            objectives: ind.objectives.clone(),
+            rank: ind.rank,
+            crowding_distance: ind.crowding_distance,
+        })
+        .collect();
+
+    let progress_data = ProgressData {
+        generation,
+        pareto_size: pareto_front.len(),
+        population_size: population.len(),
+        pareto_front,
+    };
+
+    serde_wasm_bindgen::to_value(&progress_data).unwrap()
+}
+
+/// Solve optimization problem from JavaScript object specification
 #[wasm_bindgen]
-pub fn solve_json(spec_json: &str) -> Result<String, JsValue> {
-    let spec: OptimizationSpec = serde_json::from_str(spec_json)
-        .map_err(|e| JsValue::from_str(&format!("JSON parse error: {}", e)))?;
+pub fn solve_json(
+    spec: JsValue,
+    progress_callback: Option<js_sys::Function>,
+) -> Result<JsValue, JsValue> {
+    let spec: OptimizationSpec = serde_wasm_bindgen::from_value(spec)
+        .map_err(|e| JsValue::from_str(&format!("Spec parse error: {}", e)))?;
 
     if spec.algorithm != "nsga2" && spec.algorithm != "nsga3" {
         return Err(JsValue::from_str(&format!(
@@ -336,6 +389,8 @@ pub fn solve_json(spec_json: &str) -> Result<String, JsValue> {
         spec.objectives,
         spec.initial_population,
         spec.seed,
+        progress_callback,
+        spec.progress_interval.unwrap_or(usize::MAX),
     );
 
     // Extract pareto front (rank 0)
@@ -358,7 +413,7 @@ pub fn solve_json(spec_json: &str) -> Result<String, JsValue> {
         full_population: Some(full_pop),
     };
 
-    serde_json::to_string(&result)
+    serde_wasm_bindgen::to_value(&result)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
 }
 
@@ -390,8 +445,10 @@ pub fn solve_buffers(
         0.1, // default mutation rate
         (pop_size as f64 * 0.5) as usize,
         objective_matrix,
-        None, // no initial population
-        None, // no seed
+        None,       // no initial population
+        None,       // no seed
+        None,       // no progress callback
+        usize::MAX, // no progress interval
     );
 
     // Flatten genes into Float64Array

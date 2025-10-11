@@ -1,56 +1,16 @@
 // Main TypeScript file for the demo
-import {
-  WorkerPool,
-  type WorkerStatus,
-  type OptimizationSpec,
-} from "./workerPool.js";
+import init, { solve_json } from "../../pkg/index.js";
+import type { OptimizationSpec, OptimizationResult } from "./types.js";
 
-let workerPool: WorkerPool | null = null;
 let startTime = 0;
+let wasmInitialized = false;
 
-interface OptimizationResult {
-  pareto: number[][];
-  stats: {
-    iterations: number;
-    population_size: number;
-    pareto_size: number;
-  };
-  executionTime?: number;
-}
-
-async function initWorkerPool() {
-  const numWorkersInput = document.getElementById(
-    "numWorkers"
-  ) as HTMLInputElement;
-  const numWorkers = parseInt(numWorkersInput.value);
-
-  console.log(`Initializing worker pool with ${numWorkers} workers...`);
-
-  workerPool = new WorkerPool(numWorkers, {
-    onWorkerStatusChange: updateWorkerStatusDisplay,
-    onMigration: (cycle, totalCycles) => {
-      showStatus(`Migration ${cycle}/${totalCycles} completed`, "info");
-    },
-    onComplete: (result) => {
-      const executionTime = Math.round(performance.now() - startTime);
-      displayResults({
-        pareto: result.pareto,
-        stats: result.stats,
-        executionTime,
-      });
-      enableButton();
-    },
-    onError: (error) => {
-      showError(error);
-      enableButton();
-    },
-  });
-
-  try {
-    await workerPool.initialize();
-    console.log("Worker pool initialized");
-  } catch (error) {
-    showError(`Failed to initialize worker pool: ${(error as Error).message}`);
+// Initialize WASM on page load
+async function initWasm() {
+  if (!wasmInitialized) {
+    await init();
+    wasmInitialized = true;
+    console.log("WASM module initialized");
   }
 }
 
@@ -75,19 +35,33 @@ function showStatus(message: string, className: string) {
   status.textContent = message;
 }
 
-function updateWorkerStatusDisplay(statuses: WorkerStatus[]) {
+function showError(message: string) {
+  showStatus(message, "error");
+}
+
+function updateProgressVisualization(data: any) {
+  // Update generation counter in status message
+  const statusMsg =
+    data.workerId !== undefined
+      ? `Worker ${data.workerId} - Gen ${data.generation}: ${data.pareto_size} solutions`
+      : `Generation ${data.generation}: ${data.pareto_size} Pareto solutions`;
+  showStatus(statusMsg, "info");
+}
+
+function updateWorkerStatusDisplay(statuses: any[]) {
   const workerStatusDiv = document.getElementById("workerStatus")!;
 
   workerStatusDiv.innerHTML = statuses
     .map((status) => {
-      const statusEmoji = {
+      const statusEmoji: Record<string, string> = {
         idle: "⚪",
         initializing: "🔄",
         running: "🟢",
         migrating: "🔄",
         completed: "✅",
         error: "❌",
-      }[status.status];
+      };
+      const emoji = statusEmoji[status.status] || "⚪";
 
       const progress =
         status.totalGenerations > 0
@@ -100,7 +74,7 @@ function updateWorkerStatusDisplay(statuses: WorkerStatus[]) {
         <div class="worker-card">
           <div class="worker-header">
             <span class="worker-id">Worker ${status.id + 1}</span>
-            <span >${status.status} ${statusEmoji}</span>
+            <span>${status.status} ${emoji}</span>
           </div>
           <div class="worker-progress">
             <div class="progress-bar">
@@ -119,10 +93,6 @@ function updateWorkerStatusDisplay(statuses: WorkerStatus[]) {
       `;
     })
     .join("");
-}
-
-function showError(message: string) {
-  showStatus(message, "error");
 }
 
 function displayResults(result: OptimizationResult) {
@@ -144,7 +114,7 @@ function displayResults(result: OptimizationResult) {
       <div class="stat-label">Pareto Front Size</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">${result.executionTime}ms</div>
+      <div class="stat-value">${result.executionTime || 0}ms</div>
       <div class="stat-label">Execution Time</div>
     </div>
   `;
@@ -155,16 +125,16 @@ function displayResults(result: OptimizationResult) {
 }
 
 (window as any).runOptimization = async () => {
-  if (!workerPool) {
-    showError("Worker pool not initialized");
+  if (!wasmInitialized) {
+    showError("WASM not initialized yet");
     return;
   }
 
   disableButton();
-  showStatus("Running parallel optimization...", "info");
+  showStatus("Running optimization...", "info");
 
   const algorithm = (document.getElementById("algorithm") as HTMLSelectElement)
-    .value;
+    .value as "nsga2" | "nsga3";
   const numVars = parseInt(
     (document.getElementById("numVars") as HTMLInputElement).value
   );
@@ -180,6 +150,12 @@ function displayResults(result: OptimizationResult) {
   const mutationRate = parseFloat(
     (document.getElementById("mutationRate") as HTMLInputElement).value
   );
+  const numWorkersInput = document.getElementById(
+    "numWorkers"
+  ) as HTMLInputElement;
+  const numWorkers = numWorkersInput.value
+    ? parseInt(numWorkersInput.value)
+    : undefined;
   const migrationInterval = parseInt(
     (document.getElementById("migrationInterval") as HTMLInputElement).value
   );
@@ -209,26 +185,43 @@ function displayResults(result: OptimizationResult) {
     mutation_rate: mutationRate,
     num_offsprings: Math.floor(popSize * 0.5),
     objectives,
+    workers: numWorkers || true, // Use specified workers or auto-detect
+    migration_interval: migrationInterval,
+    migration_rate: migrationRate,
+    progress_interval: 10, // Callback every 10 generations
   };
 
   startTime = performance.now();
 
   try {
-    await workerPool.solve(spec, {
-      interval: migrationInterval,
-      rate: migrationRate,
+    const result = await solve_json(
+      spec,
+      (progressData) => {
+        updateProgressVisualization(progressData);
+      },
+      {
+        onWorkerStatusChange: updateWorkerStatusDisplay,
+        onMigration: (cycle, totalCycles) => {
+          showStatus(`Migration ${cycle}/${totalCycles} completed`, "info");
+        },
+        onError: (error) => {
+          showError(error);
+        },
+      }
+    );
+
+    const executionTime = Math.round(performance.now() - startTime);
+    displayResults({
+      ...result,
+      executionTime,
     });
+    enableButton();
   } catch (error) {
     console.error("Optimization failed:", error);
+    showError(`Optimization failed: ${(error as Error).message}`);
+    enableButton();
   }
 };
 
-(window as any).reinitializePool = async () => {
-  if (workerPool) {
-    workerPool.terminate();
-  }
-  await initWorkerPool();
-};
-
-// Initialize worker pool on page load
-initWorkerPool();
+// Initialize WASM on page load
+initWasm();

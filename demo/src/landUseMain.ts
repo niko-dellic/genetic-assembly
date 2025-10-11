@@ -1,10 +1,8 @@
 // Main logic for land use allocation optimizer demo
 
-import {
-  WorkerPool,
-  type WorkerStatus,
-  type OptimizationSpec,
-} from "./workerPool.js";
+import Plotly from "plotly.js-dist";
+import init, { solve_json } from "../../pkg/index.js";
+import type { OptimizationSpec } from "./types.js";
 import {
   createExampleProblem,
   buildObjectiveMatrices,
@@ -19,40 +17,17 @@ import {
   drawCapacityVsDemand,
 } from "./visualization.js";
 
-let workerPool: WorkerPool | null = null;
+let wasmInitialized = false;
 let currentProblem: LandUseProblem = createExampleProblem();
 let paretoSolutions: LandUseSolution[] = [];
 let selectedSolutionIdx = 0;
 
-async function initWorkerPool() {
-  const numWorkersInput = document.getElementById(
-    "numWorkers"
-  ) as HTMLInputElement;
-  const numWorkers = parseInt(numWorkersInput.value);
-
-  console.log(`Initializing worker pool with ${numWorkers} workers...`);
-
-  workerPool = new WorkerPool(numWorkers, {
-    onWorkerStatusChange: updateWorkerStatusDisplay,
-    onMigration: (cycle, totalCycles) => {
-      showStatus(`Migration ${cycle}/${totalCycles} completed`, "info");
-    },
-    onComplete: (result) => {
-      displayResults(result);
-      enableButton();
-    },
-    onError: (error) => {
-      showError(error);
-      enableButton();
-    },
-  });
-
-  try {
-    await workerPool.initialize();
-    console.log("Worker pool initialized");
+async function initWasm() {
+  if (!wasmInitialized) {
+    await init();
+    wasmInitialized = true;
+    console.log("WASM module initialized");
     loadExampleProblem();
-  } catch (error) {
-    showError(`Failed to initialize worker pool: ${(error as Error).message}`);
   }
 }
 
@@ -94,52 +69,6 @@ function loadExampleProblem() {
   totalAreaSpan.textContent = `${currentProblem.totalArea.toLocaleString()} sqft`;
 }
 
-function updateWorkerStatusDisplay(statuses: WorkerStatus[]) {
-  const workerStatusDiv = document.getElementById("workerStatus")!;
-
-  workerStatusDiv.innerHTML = statuses
-    .map((status) => {
-      const statusEmoji = {
-        idle: "⚪",
-        initializing: "🔄",
-        running: "🟢",
-        migrating: "🔄",
-        completed: "✅",
-        error: "❌",
-      }[status.status];
-
-      const progress =
-        status.totalGenerations > 0
-          ? Math.round(
-              (status.currentGeneration / status.totalGenerations) * 100
-            )
-          : 0;
-
-      return `
-        <div class="worker-card">
-          <div class="worker-header">
-            <span class="worker-id">Worker ${status.id + 1}</span>
-            <span>${status.status} ${statusEmoji}</span>
-          </div>
-          <div class="worker-progress">
-            <div class="progress-bar">
-              <div class="progress-fill" style="width: ${progress}%"></div>
-            </div>
-            <div class="progress-text">${status.currentGeneration} / ${
-        status.totalGenerations
-      } generations</div>
-          </div>
-          ${
-            status.error
-              ? `<div class="worker-error">${status.error}</div>`
-              : ""
-          }
-        </div>
-      `;
-    })
-    .join("");
-}
-
 function disableButton() {
   const btn = document.getElementById("runBtn") as HTMLButtonElement;
   btn.disabled = true;
@@ -163,6 +92,146 @@ function showStatus(message: string, className: string) {
 
 function showError(message: string) {
   showStatus(message, "error");
+}
+
+function updateLiveProgress(data: any) {
+  // Update generation counter
+  showStatus(
+    `Generation ${data.generation}: ${data.pareto_size} solutions`,
+    "info"
+  );
+
+  // Convert progress data to land use solutions for visualization
+  const solutions: LandUseSolution[] = data.pareto_front.map((solution: any) =>
+    createSolution(solution.genes, currentProblem)
+  );
+
+  if (solutions.length > 0) {
+    // Update Pareto front chart
+    updateLiveParetoChart(solutions);
+
+    // Show best current solution
+    const bestSolution = findBestCompromise(solutions);
+    updateLiveSolutionDisplay(bestSolution);
+  }
+}
+
+function updateWorkerStatusDisplay(statuses: any[]) {
+  const workerStatusDiv = document.getElementById("workerStatus")!;
+
+  workerStatusDiv.innerHTML = statuses
+    .map((status) => {
+      const statusEmoji: Record<string, string> = {
+        idle: "⚪",
+        initializing: "🔄",
+        running: "🟢",
+        migrating: "🔄",
+        completed: "✅",
+        error: "❌",
+      };
+      const emoji = statusEmoji[status.status] || "⚪";
+
+      const progress =
+        status.totalGenerations > 0
+          ? Math.round(
+              (status.currentGeneration / status.totalGenerations) * 100
+            )
+          : 0;
+
+      return `
+        <div class="worker-card">
+          <div class="worker-header">
+            <span class="worker-id">Worker ${status.id + 1}</span>
+            <span>${status.status} ${emoji}</span>
+          </div>
+          <div class="worker-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${progress}%"></div>
+            </div>
+            <div class="progress-text">${status.currentGeneration} / ${
+        status.totalGenerations
+      } generations</div>
+          </div>
+          ${
+            status.error
+              ? `<div class="worker-error">${status.error}</div>`
+              : ""
+          }
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function updateLiveParetoChart(solutions: LandUseSolution[]) {
+  const overcrowdings = solutions.map((s) => s.objectives.overcrowding);
+  const underutilizations = solutions.map((s) => s.objectives.underutilization);
+
+  // Use Plotly.react for efficient updates (no full redraw)
+  const paretoData = [
+    {
+      x: overcrowdings,
+      y: underutilizations,
+      mode: "markers" as const,
+      type: "scatter" as const,
+      marker: {
+        size: 8,
+        color: "#667eea",
+        opacity: 0.7,
+      },
+      name: "Current Front",
+    },
+  ];
+
+  const layout: any = {
+    title: { text: `Current Pareto Front (${solutions.length} solutions)` },
+    xaxis: { title: { text: "Overcrowding" } },
+    yaxis: { title: { text: "Underutilization" } },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: { color: "#e0e0e0" },
+    margin: { t: 40, b: 60, l: 60, r: 20 },
+    showlegend: false,
+  };
+
+  Plotly.react("paretoChart", paretoData, layout);
+}
+
+function updateLiveSolutionDisplay(solution: LandUseSolution) {
+  // Update charts with best current solution
+  drawPieChart("pieChart", solution, currentProblem);
+
+  const metrics = solution.metrics!;
+  drawUtilizationHeatmap("heatmapChart", metrics, currentProblem);
+  drawCapacityVsDemand("capacityChart", metrics, currentProblem);
+
+  // Make visualizations visible
+  document.getElementById("visualizations")!.style.display = "block";
+}
+
+function findBestCompromise(solutions: LandUseSolution[]): LandUseSolution {
+  const maxOvercrowding = Math.max(
+    ...solutions.map((s) => s.objectives.overcrowding)
+  );
+  const maxUnderutilization = Math.max(
+    ...solutions.map((s) => s.objectives.underutilization)
+  );
+
+  let best = solutions[0];
+  let bestDistance = Infinity;
+
+  for (const solution of solutions) {
+    const normX = solution.objectives.overcrowding / maxOvercrowding;
+    const normY = solution.objectives.underutilization / maxUnderutilization;
+    const distance = Math.sqrt(normX * normX + normY * normY);
+
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = solution;
+    }
+  }
+
+  return best;
 }
 
 function displayResults(result: any) {
@@ -248,8 +317,8 @@ function createSolutionSelector() {
 }
 
 (window as any).runOptimization = async () => {
-  if (!workerPool) {
-    showError("Worker pool not initialized");
+  if (!wasmInitialized) {
+    showError("WASM not initialized yet");
     return;
   }
 
@@ -262,6 +331,12 @@ function createSolutionSelector() {
   const popSize = parseInt(
     (document.getElementById("popSize") as HTMLInputElement).value
   );
+  const numWorkersInput = document.getElementById(
+    "numWorkers"
+  ) as HTMLInputElement;
+  const numWorkers = numWorkersInput.value
+    ? parseInt(numWorkersInput.value)
+    : undefined;
   const migrationInterval = parseInt(
     (document.getElementById("migrationInterval") as HTMLInputElement).value
   );
@@ -282,23 +357,36 @@ function createSolutionSelector() {
     mutation_rate: 0.1,
     num_offsprings: Math.floor(popSize * 0.5),
     objectives,
+    workers: numWorkers || true, // Use specified workers or auto-detect
+    migration_interval: migrationInterval,
+    migration_rate: migrationRate,
+    progress_interval: 10, // Update every 10 generations
   };
 
   try {
-    await workerPool.solve(spec, {
-      interval: migrationInterval,
-      rate: migrationRate,
-    });
+    const result = await solve_json(
+      spec,
+      (progressData) => {
+        updateLiveProgress(progressData);
+      },
+      {
+        onWorkerStatusChange: updateWorkerStatusDisplay,
+        onMigration: (cycle, totalCycles) => {
+          showStatus(`Migration ${cycle}/${totalCycles} completed`, "info");
+        },
+        onError: (error) => {
+          showError(error);
+        },
+      }
+    );
+
+    displayResults(result);
+    enableButton();
   } catch (error) {
     console.error("Optimization failed:", error);
+    showError(`Optimization failed: ${(error as Error).message}`);
+    enableButton();
   }
-};
-
-(window as any).reinitializePool = async () => {
-  if (workerPool) {
-    workerPool.terminate();
-  }
-  await initWorkerPool();
 };
 
 // Initialize on page load
@@ -307,5 +395,5 @@ document.addEventListener("DOMContentLoaded", () => {
     "numWorkers"
   ) as HTMLInputElement;
   numWorkersInput.value = String(navigator.hardwareConcurrency || 4);
-  initWorkerPool();
+  initWasm();
 });

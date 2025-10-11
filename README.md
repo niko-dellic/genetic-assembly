@@ -53,6 +53,20 @@ npm i
 npm run dev
 ```
 
+**Build Flags Explained:**
+
+The `build:wasm` script uses these important flags:
+
+- `--target web`: Generates ES module output for direct browser import (required for Vite/module bundlers)
+- `--out-dir pkg`: Outputs to the `pkg/` directory
+- `--release`: Builds with optimizations (3x+ faster than debug builds)
+
+**Manual build command:**
+
+```bash
+wasm-pack build --target web --out-dir pkg --release
+```
+
 The demo includes two examples:
 
 - **Parallel NSGA-II Demo** (`index.html`) - General-purpose multi-objective optimization
@@ -124,15 +138,76 @@ The parallel demo provides these additional controls:
 
 ### Usage Example
 
+Parallel execution is now built into the main `solve_json` API. Simply add the `workers` field to your spec:
+
 ```typescript
-import { WorkerPool } from "./workerPool.js";
+import init, { solve_json } from "./pkg/index.js";
 
-// Create pool with auto-detected workers
-const pool = new WorkerPool();
-await pool.initialize();
+await init();
 
-// Run optimization with migration
-const result = await pool.solve(
+// Single-threaded (synchronous)
+const result1 = solve_json({
+  algorithm: "nsga2",
+  num_vars: 10,
+  population_size: 100,
+  num_iterations: 200,
+  crossover_rate: 0.9,
+  mutation_rate: 0.1,
+  num_offsprings: 50,
+  objectives: [
+    /* your objectives */
+  ],
+}); // Returns OptimizationResult immediately
+
+// Parallel execution with auto-detected cores (asynchronous)
+const result2 = await solve_json({
+  algorithm: "nsga2",
+  num_vars: 10,
+  population_size: 100,
+  num_iterations: 200,
+  crossover_rate: 0.9,
+  mutation_rate: 0.1,
+  num_offsprings: 50,
+  objectives: [
+    /* your objectives */
+  ],
+  workers: true, // Enable parallel execution - returns Promise<OptimizationResult>
+  migration_interval: 20, // Migrate every 20 generations (default: 20)
+  migration_rate: 0.1, // Exchange 10% of population (default: 0.1)
+});
+
+console.log(`Found ${result2.stats.pareto_size} Pareto optimal solutions`);
+
+// Or specify exact worker count (also asynchronous)
+const result3 = await solve_json({
+  ...spec,
+  workers: 4, // Use exactly 4 workers - returns Promise<OptimizationResult>
+});
+```
+
+**Key Benefits:**
+
+- No manual worker pool management
+- Workers automatically created and cleaned up
+- Same API for single and parallel execution
+- **Smart return types**: Synchronous without workers, Promise with workers (TypeScript enforces correct usage)
+- Progress callbacks work transparently
+
+See [PARALLEL_IMPLEMENTATION.md](./PARALLEL_IMPLEMENTATION.md) for detailed technical documentation.
+
+## Progress Callbacks
+
+Monitor optimization progress in real-time for live visualizations with Three.js, Plotly, or other visualization libraries.
+
+### Usage
+
+```typescript
+import init, { solve_json } from "./pkg/index.js";
+import type { OptimizationSpec, OptimizationResult } from "./pkg/index.js";
+
+await init();
+
+const result = solve_json(
   {
     algorithm: "nsga2",
     num_vars: 10,
@@ -144,17 +219,81 @@ const result = await pool.solve(
     objectives: [
       /* your objectives */
     ],
+    progress_interval: 10, // Callback every 10 generations
   },
-  {
-    interval: 20, // Migrate every 20 generations
-    rate: 0.1, // Exchange 10% of population
+  (progressData) => {
+    // Update your visualization here
+    console.log(
+      `Gen ${progressData.generation}: ${progressData.pareto_size} solutions`
+    );
+    updateVisualization(progressData.pareto_front);
   }
 );
-
-console.log(`Found ${result.stats.pareto_size} Pareto optimal solutions`);
 ```
 
-See [PARALLEL_IMPLEMENTATION.md](./PARALLEL_IMPLEMENTATION.md) for detailed technical documentation.
+### With Worker Pool
+
+```typescript
+const pool = new WorkerPool(4, {
+  onProgress: (data) => {
+    // Aggregate progress from all workers
+    updateLiveChart(data.pareto_front);
+  },
+  onWorkerProgress: (workerId, data) => {
+    // Per-worker progress for status display
+    console.log(`Worker ${workerId} - Gen ${data.generation}`);
+  },
+});
+
+await pool.initialize();
+
+await pool.solve(
+  {
+    algorithm: "nsga2",
+    // ... spec ...
+    progress_interval: 5, // Update every 5 generations
+  },
+  {
+    interval: 20,
+    rate: 0.1,
+  }
+);
+```
+
+### Progress Data Structure
+
+```typescript
+interface ProgressData {
+  generation: number; // Current generation number
+  pareto_size: number; // Number of solutions in Pareto front
+  population_size: number; // Total population size
+  pareto_front: Solution[]; // Current non-dominated solutions
+  workerId?: number; // Worker ID (when using WorkerPool)
+}
+
+interface Solution {
+  genes: number[]; // Decision variables (binary: 0.0 or 1.0)
+  objectives: number[]; // Objective values
+  rank: number; // Pareto rank (0 = non-dominated)
+  crowding_distance: number; // Diversity metric
+}
+```
+
+### Benefits
+
+- **Live Visualization**: Update charts, 3D scenes, or dashboards in real-time
+- **User Feedback**: Show optimization progress to users
+- **Early Stopping**: Monitor convergence and stop early if needed
+- **Performance**: Callbacks are triggered at user-controlled intervals (no overhead if disabled)
+
+### Examples
+
+The demo applications include progress callbacks:
+
+- **NSGA-II Demo**: Shows generation count and Pareto size in status message
+- **Land Use Demo**: Updates Plotly charts with current Pareto front and best solution in real-time
+
+See [examples.js](./examples.js) for standalone code examples.
 
 ## API Reference
 
@@ -162,13 +301,26 @@ See [PARALLEL_IMPLEMENTATION.md](./PARALLEL_IMPLEMENTATION.md) for detailed tech
 
 The package exports two main functions for solving multi-objective optimization problems:
 
-#### `solve_json(spec: string): string`
+#### `solve_json(spec: object, progressCallback?: Function): object`
 
-Solves a multi-objective optimization problem using a JSON specification.
+Solves a multi-objective optimization problem using a JavaScript object specification.
 
 **Parameters:**
 
-- `spec`: JSON string containing the optimization specification
+- `spec`: JavaScript object containing the optimization specification (automatically serialized internally)
+- `progressCallback` (optional): Callback function called at regular intervals with progress data
+
+**Note:** Pass the specification object directly—no need for `JSON.stringify()`. The WASM module handles serialization internally for convenience.
+
+**TypeScript Support:** The package includes full TypeScript definitions. Import types from `"./pkg/index.js"` for complete type safety:
+
+```typescript
+import type {
+  OptimizationSpec,
+  OptimizationResult,
+  ProgressCallback,
+} from "./pkg/index.js";
+```
 
 **Specification Format:**
 
@@ -184,7 +336,11 @@ Solves a multi-objective optimization problem using a JSON specification.
   objectives: number[][],             // Objective coefficient matrix (M objectives × N variables)
   constraints?: number[][],           // Optional constraint matrix (not yet enforced)
   initial_population?: number[][],    // Optional: Resume from previous population (genes only)
-  seed?: number                       // Optional: RNG seed for deterministic execution
+  seed?: number,                      // Optional: RNG seed for deterministic execution
+  progress_interval?: number,         // Optional: Callback interval in generations
+  workers?: boolean | number,         // Optional: Enable parallel execution (true=auto-detect, number=specific count)
+  migration_interval?: number,        // Optional: Generations between migrations (default: 20, only with workers)
+  migration_rate?: number             // Optional: Percentage to migrate (default: 0.1, only with workers)
 }
 ```
 
@@ -194,6 +350,8 @@ Solves a multi-objective optimization problem using a JSON specification.
 - `objectives`: Each row represents one objective as a linear combination of decision variables
 - `initial_population`: Array of gene arrays (binary values 0.0 or 1.0) to seed the initial population
 - `seed`: Use the same seed to get reproducible results across runs
+- `workers`: Set to `true` for auto-detection or a number (e.g., `4`) for specific worker count. Workers are automatically managed (created and terminated)
+- `migration_interval` & `migration_rate`: Only used when `workers` is enabled. Controls the island model migration strategy
 
 **Returns:**
 
@@ -217,11 +375,12 @@ Solves a multi-objective optimization problem using a JSON specification.
 **Example:**
 
 ```typescript
-import init, { solve_json } from "./pkg/genetic_assembly.js";
+import init, { solve_json } from "./pkg/index.js";
+import type { OptimizationSpec, OptimizationResult } from "./pkg/index.js";
 
 await init();
 
-const spec = {
+const spec: OptimizationSpec = {
   algorithm: "nsga2",
   num_vars: 5,
   population_size: 100,
@@ -235,21 +394,20 @@ const spec = {
   ],
 };
 
-const resultJson = solve_json(JSON.stringify(spec));
-const result = JSON.parse(resultJson);
+const result: OptimizationResult = solve_json(spec);
 
 console.log("Pareto front:", result.pareto);
 console.log("Statistics:", result.stats);
 
 // Resume from previous population
-const resumedSpec = {
+const resumedSpec: OptimizationSpec = {
   ...spec,
   initial_population: result.full_population, // Use previous final population
   num_iterations: 100, // Run 100 more generations
 };
 
-const resumedResult = solve_json(JSON.stringify(resumedSpec));
-console.log("Improved solutions:", JSON.parse(resumedResult).pareto);
+const resumedResult: OptimizationResult = solve_json(resumedSpec);
+console.log("Improved solutions:", resumedResult.pareto);
 
 // Deterministic execution (same seed = same results)
 const deterministicSpec = {
@@ -318,7 +476,8 @@ The demo includes a Web Worker implementation for running optimization in a back
 
 ```typescript
 // worker.ts
-import init, { solve_json } from "../../pkg/genetic_assembly.js";
+import init, { solve_json } from "../../pkg/index.js";
+import type { OptimizationSpec } from "./types.js";
 
 let isInitialized = false;
 
@@ -339,8 +498,15 @@ self.onmessage = async (e) => {
     }
 
     try {
-      const result = solve_json(JSON.stringify(payload));
-      self.postMessage({ type: "SOLVE_SUCCESS", result: JSON.parse(result) });
+      // Optional progress callback
+      const progressCallback = payload.progress_interval
+        ? (progressData) => {
+            self.postMessage({ type: "PROGRESS", data: progressData });
+          }
+        : undefined;
+
+      const result = solve_json(payload, progressCallback);
+      self.postMessage({ type: "SOLVE_SUCCESS", result });
     } catch (error) {
       self.postMessage({ type: "ERROR", error: error.message });
     }
@@ -462,7 +628,7 @@ genetic-assembly/
 ### Building
 
 ```bash
-# Build WASM package
+# Build WASM package (generates optimized WASM in pkg/ directory)
 npm run build:wasm
 
 # Build demo for production
@@ -471,6 +637,8 @@ npm run build
 # Preview production build
 npm run preview
 ```
+
+**Note:** The `build:wasm` command compiles Rust to WebAssembly with the `--target web` flag, which generates ES module output compatible with modern browsers and bundlers like Vite.
 
 ### Testing
 

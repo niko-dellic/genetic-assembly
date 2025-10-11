@@ -23,6 +23,9 @@ export interface OptimizationSpec {
   mutation_rate: number;
   num_offsprings: number;
   objectives: number[][];
+  progress_interval?: number;
+  initial_population?: number[][];
+  seed?: number;
 }
 
 export interface WorkerResult {
@@ -45,6 +48,8 @@ export interface PoolCallbacks {
   onMigration?: (cycle: number, totalCycles: number) => void;
   onComplete?: (result: WorkerResult) => void;
   onError?: (error: string) => void;
+  onProgress?: (data: any) => void; // Aggregate progress callback
+  onWorkerProgress?: (workerId: number, data: any) => void; // Per-worker progress
 }
 
 export class WorkerPool {
@@ -188,7 +193,18 @@ export class WorkerPool {
       promises.push(
         new Promise((resolve, reject) => {
           const handler = (e: MessageEvent) => {
-            const { type, result, error } = e.data;
+            const { type, result, error, data, workerId } = e.data;
+
+            if (type === "PROGRESS") {
+              // Forward progress callbacks
+              if (this.callbacks.onWorkerProgress) {
+                this.callbacks.onWorkerProgress(workerId, data);
+              }
+              if (this.callbacks.onProgress) {
+                this.callbacks.onProgress(data);
+              }
+              return; // Don't resolve, wait for SOLVE_SUCCESS
+            }
 
             if (type === "SOLVE_SUCCESS") {
               this.workerPopulations[i] = result.full_population || null;
