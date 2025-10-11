@@ -1,6 +1,6 @@
 # genetic-assembly
 
-WebAssembly wrapper for NSGA-II/III multi-objective genetic algorithms with parallel island model support.
+WebAssembly wrapper for NSGA-II multi-objective genetic algorithm with parallel island model support.
 
 ## Features
 
@@ -9,6 +9,8 @@ WebAssembly wrapper for NSGA-II/III multi-objective genetic algorithms with para
 - 🏝️ **Parallel Island Model**: Distribute optimization across multiple CPU cores
 - 👷 **Web Worker Pool**: Automatic worker management and load balancing
 - 🔄 **Solution Migration**: Periodic elite exchange between islands for better convergence
+- 🌱 **Population Seeding**: Resume optimization from previous populations
+- 🎲 **Deterministic Execution**: Optional RNG seeding for reproducible results
 - 📦 **TypeScript APIs**: Fully typed interfaces for easy integration
 - 🎯 **Two API Styles**: JSON-based and buffer-based APIs
 
@@ -22,7 +24,10 @@ The implementation includes:
 - Crowding distance calculation for solution diversity
 - Binary tournament selection
 - Single-point crossover and bit-flip mutation operators
-- Support for binary decision variables
+- **Binary decision variables only** (0.0 or 1.0 genes)
+- **Linear objective functions** (coefficient matrix representation)
+- Population seeding for resumable/incremental optimization
+- Deterministic RNG seeding for reproducible results
 
 ## Installation
 
@@ -82,12 +87,13 @@ A real-world application that optimizes building space allocation across differe
 1. **Minimize Overcrowding**: Penalty when demand exceeds capacity
 2. **Minimize Underutilization**: Penalty when capacity significantly exceeds demand
 
-**Visualizations:**
+**Interactive Visualizations** (using Plotly.js):
 
 - Pie chart showing area allocation across land uses
 - Utilization heatmap (land use × time period)
-- Pareto front showing trade-offs between objectives
-- Capacity vs demand comparison charts
+- Pareto front scatter plot showing trade-offs between objectives
+- Capacity vs demand comparison bar charts
+- Click any Pareto solution to explore its detailed metrics
 
 This example demonstrates how to apply NSGA-II to real-world resource allocation problems with multiple competing objectives.
 
@@ -168,30 +174,45 @@ Solves a multi-objective optimization problem using a JSON specification.
 
 ```typescript
 {
-  algorithm: "nsga2" | "nsga3",      // Algorithm to use
-  num_vars: number,                   // Number of decision variables
+  algorithm: "nsga2",                 // Algorithm (only "nsga2" currently supported)
+  num_vars: number,                   // Number of binary decision variables
   population_size: number,            // Population size
   num_iterations: number,             // Number of generations
   crossover_rate: number,             // Crossover probability (0-1)
   mutation_rate: number,              // Mutation probability (0-1)
   num_offsprings: number,             // Number of offspring per generation
-  objectives: number[][],             // Objective coefficient matrix
-  constraints?: number[][]            // Optional constraint matrix
+  objectives: number[][],             // Objective coefficient matrix (M objectives × N variables)
+  constraints?: number[][],           // Optional constraint matrix (not yet enforced)
+  initial_population?: number[][],    // Optional: Resume from previous population (genes only)
+  seed?: number                       // Optional: RNG seed for deterministic execution
 }
 ```
+
+**Notes:**
+
+- `algorithm`: While "nsga3" is accepted, it currently runs NSGA-II internally (NSGA-III not yet implemented)
+- `objectives`: Each row represents one objective as a linear combination of decision variables
+- `initial_population`: Array of gene arrays (binary values 0.0 or 1.0) to seed the initial population
+- `seed`: Use the same seed to get reproducible results across runs
 
 **Returns:**
 
 ```typescript
 {
-  pareto: number[][],                 // Pareto front solutions
+  pareto: number[][],                 // Pareto front solutions (genes only)
   stats: {
-    iterations: number,
-    population_size: number,
-    pareto_size: number
-  }
+    iterations: number,               // Number of iterations run
+    population_size: number,          // Final population size
+    pareto_size: number               // Number of solutions in Pareto front
+  },
+  full_population?: number[][]        // Optional: Complete final population for resuming
 }
 ```
+
+**Notes:**
+
+- `pareto`: Array of gene arrays representing non-dominated solutions (rank 0)
+- `full_population`: Included by default when using `solve_json`, can be used as `initial_population` for resumable execution
 
 **Example:**
 
@@ -219,6 +240,26 @@ const result = JSON.parse(resultJson);
 
 console.log("Pareto front:", result.pareto);
 console.log("Statistics:", result.stats);
+
+// Resume from previous population
+const resumedSpec = {
+  ...spec,
+  initial_population: result.full_population, // Use previous final population
+  num_iterations: 100, // Run 100 more generations
+};
+
+const resumedResult = solve_json(JSON.stringify(resumedSpec));
+console.log("Improved solutions:", JSON.parse(resumedResult).pareto);
+
+// Deterministic execution (same seed = same results)
+const deterministicSpec = {
+  ...spec,
+  seed: 12345, // Fixed seed for reproducibility
+};
+
+const result1 = solve_json(JSON.stringify(deterministicSpec));
+const result2 = solve_json(JSON.stringify(deterministicSpec));
+// result1 and result2 will be identical
 ```
 
 #### `solve_buffers(x0?, dims, objectives, rows, cols, popSize, generations): Float64Array`
@@ -330,23 +371,58 @@ npm run build
 
 ## Algorithm Details
 
-### NSGA-II (Non-dominated Sorting Genetic Algorithm II)
+### Supported Algorithms
 
-The implementation includes:
+**Currently Implemented:**
+
+- ✅ **NSGA-II** (Non-dominated Sorting Genetic Algorithm II)
+
+**Planned:**
+
+- ⏳ **NSGA-III** (for many-objective optimization with 4+ objectives)
+
+**Note:** While the API accepts "nsga3" as an algorithm parameter, it currently falls back to NSGA-II internally. This is documented for future compatibility when NSGA-III is implemented.
+
+### NSGA-II Implementation
+
+The NSGA-II implementation includes:
 
 - **Fast Non-dominated Sorting**: Efficiently categorizes population into Pareto fronts
 - **Crowding Distance**: Maintains diversity in the Pareto front
 - **Binary Tournament Selection**: Selects parents based on rank and crowding distance
 - **Single-point Crossover**: Combines genetic material from two parents
-- **Bit-flip Mutation**: Introduces variation by flipping binary genes
+- **Bit-flip Mutation**: Introduces variation by flipping binary genes (0.0 ↔ 1.0)
+
+**Limitations:**
+
+- Binary variables only (each gene is either 0.0 or 1.0)
+- Linear objective functions (expressed as coefficient matrices)
+- Constraints are accepted but not enforced (for future use)
 
 ### Multi-Objective Optimization
 
-The algorithm optimizes multiple conflicting objectives simultaneously. For example:
+The algorithm optimizes multiple conflicting objectives simultaneously, producing a **Pareto front** of trade-off solutions.
+
+**Ideal Use Cases:**
+
+- **Binary Knapsack Problems**: Select items (0/1) to maximize value while minimizing weight
+- **Feature Selection**: Choose which features to include (on/off) to balance accuracy and complexity
+- **Resource Allocation**: Allocate discrete units (present/absent) across competing objectives
+- **Subset Selection**: Pick elements from a set to optimize multiple criteria
+
+**Examples:**
 
 - **Knapsack Problem**: Maximize value while minimizing weight
-- **Engineering Design**: Minimize cost while maximizing performance
-- **Portfolio Optimization**: Maximize returns while minimizing risk
+- **Land Use Allocation**: Allocate building space to minimize overcrowding and underutilization (see demo)
+- **Portfolio Selection**: Choose which assets to include while balancing risk and return
+- **Network Design**: Select which links to activate to optimize cost and reliability
+
+**Not Suitable For:**
+
+- Continuous optimization problems (requires binary encoding)
+- Non-linear objective functions
+- Problems requiring constraint enforcement
+- Many-objective optimization (4+ objectives - use NSGA-III when available)
 
 ## Examples
 
@@ -363,16 +439,24 @@ See [examples.js](./examples.js) for comprehensive usage examples including:
 ```
 genetic-assembly/
 ├── src/
-│   └── lib.rs              # Rust WASM implementation
+│   └── lib.rs                  # Rust WASM implementation (NSGA-II only)
 ├── demo/
-│   ├── index.html          # Demo UI
+│   ├── index.html              # Parallel NSGA-II demo
+│   ├── landuse.html            # Land use allocation example
+│   ├── styles/
+│   │   └── styles.css          # Shared styles for demos
 │   └── src/
-│       ├── main.ts         # Main application logic
-│       └── worker.ts       # Web Worker for WASM
-├── pkg/                    # Generated WASM package
-├── Cargo.toml             # Rust dependencies
-├── package.json           # Node.js dependencies
-└── vite.config.ts         # Vite configuration
+│       ├── main.ts             # Main demo logic
+│       ├── worker.ts           # Web Worker for WASM
+│       ├── workerPool.ts       # Parallel worker pool manager
+│       ├── landUseMain.ts      # Land use demo logic
+│       ├── landUseOptimizer.ts # Land use problem formulation
+│       ├── visualization.ts    # Plotly.js visualizations
+│       └── plotly.d.ts         # Plotly type declarations
+├── pkg/                        # Generated WASM package
+├── Cargo.toml                  # Rust dependencies
+├── package.json                # Node.js dependencies
+└── vite.config.ts              # Vite configuration
 ```
 
 ### Building
