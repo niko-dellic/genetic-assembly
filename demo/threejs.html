@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Land Use Optimizer - Genetic Assembly</title>
+    <title>Three.js Optimization Demo - Genetic Assembly</title>
     <link rel="stylesheet" href="/styles/styles.css" />
     <style>
       /* Navigation bar */
@@ -51,7 +51,6 @@
       }
 
       .section-title {
-        font-size: 18px;
         margin-top: 25px;
         margin-bottom: 15px;
       }
@@ -82,23 +81,14 @@
         border-radius: 6px;
       }
 
-      #allocationStats {
+      #solutionDisplay {
         color: var(--text-color);
-        font-size: 13px;
         line-height: 1.6;
       }
 
-      #allocationStats h4 {
+      #solutionDisplay h4 {
         color: var(--primary-color);
         margin: 10px 0 5px 0;
-      }
-
-      #solutionSelector {
-        margin: 15px 0;
-        padding: 10px;
-        background: var(--background-color-light);
-        border-radius: 6px;
-        color: var(--text-color);
       }
     </style>
   </head>
@@ -106,57 +96,49 @@
     <div class="container">
       <nav class="nav-bar">
         <a href="index.html">🔬 Basic NSGA-II</a>
-        <a href="landuse.html" class="active">🏢 Land Use Optimizer</a>
-        <a href="threejs.html">🎨 Three.js Integration</a>
+        <a href="landuse.html">🏢 Land Use Optimizer</a>
+        <a href="threejs.html" class="active">🎨 Three.js Integration</a>
       </nav>
 
-      <h1>🏢 Land Use Allocation Optimizer</h1>
+      <h1>🎨 Three.js Land Use Optimizer</h1>
       <p class="subtitle">
-        Multi-objective optimization for balancing occupancy across land uses
-        and time periods
+        Optimize userData properties of Three.js objects using custom evaluation
+        functions and parallel NSGA-II
       </p>
 
       <div class="section-title">Problem Setup</div>
-      <p style="color: var(--text-color); font-size: 14px">
-        Total Building Area: <strong id="totalArea">10,000 sqft</strong>
+      <p style="color: var(--text-color); font-size: 14px; line-height: 1.6">
+        <strong>Complex Multi-Use Building Optimization:</strong> This demo
+        optimizes space allocation for
+        <strong>7 different land uses</strong> (Restaurant, Residential, Retail,
+        Office, Cafe, Gym, Green Space) across
+        <strong>6 time periods</strong> throughout the day. The solver balances
+        <strong>3 competing objectives</strong>: <br />• Minimizing overcrowding
+        (quadratic penalty) <br />• Minimizing underutilization (linear penalty)
+        <br />• Minimizing annual operating costs <br /><br />With 7 decision
+        variables, 42 demand-capacity checks (7 uses × 6 periods), and
+        non-linear constraints, this creates a challenging multi-objective
+        problem space.
       </p>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Land Use</th>
-            <th>Sqft per Person</th>
-            <th>Min Area (sqft)</th>
-          </tr>
-        </thead>
-        <tbody id="landUseTableBody"></tbody>
-      </table>
-
-      <div class="section-title" style="margin-top: 20px">Demand Patterns</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Land Use</th>
-            <th>Morning (7-12)</th>
-            <th>Afternoon (12-17)</th>
-            <th>Evening (17-22)</th>
-          </tr>
-        </thead>
-        <tbody id="demandTableBody"></tbody>
-      </table>
 
       <div class="section-title">Optimization Parameters</div>
       <div class="controls">
         <div class="control-group">
-          <label for="popSize">Population Size (per worker):</label>
-          <input type="number" id="popSize" value="50" min="10" max="500" />
+          <label for="populationSize">Population Size (per worker):</label>
+          <input
+            type="number"
+            id="populationSize"
+            value="120"
+            min="10"
+            max="500"
+          />
         </div>
         <div class="control-group">
           <label for="generations">Generations:</label>
           <input
             type="number"
             id="generations"
-            value="100"
+            value="400"
             min="10"
             max="1000"
           />
@@ -186,10 +168,19 @@
             step="0.05"
           />
         </div>
+        <div class="control-group">
+          <label for="totalArea">Total Area (sqft):</label>
+          <input
+            type="number"
+            id="totalArea"
+            value="50000"
+            min="1000"
+            max="200000"
+          />
+        </div>
       </div>
 
       <button id="runBtn" onclick="runOptimization()">Run Optimization</button>
-      <button onclick="reinitializePool()">Reinitialize Workers</button>
 
       <div class="worker-grid">
         <div class="section-title">Worker Status</div>
@@ -199,37 +190,49 @@
       <div class="results" id="results" style="display: none">
         <div class="status" id="status"></div>
 
-        <div id="solutionSelector"></div>
-
         <div id="visualizations" class="visualizations" style="display: none">
+          <div class="viz-card">
+            <div class="viz-title">Optimization Progress</div>
+            <div id="progressChart" class="plotly-chart"></div>
+          </div>
+
           <div class="viz-card">
             <div class="viz-title">Pareto Front</div>
             <div id="paretoChart" class="plotly-chart"></div>
           </div>
 
           <div class="viz-card">
-            <div class="viz-title">Area Allocation</div>
-            <div id="pieChart" class="plotly-chart"></div>
-          </div>
-
-          <div class="viz-card">
-            <div class="viz-title">Utilization Heatmap</div>
-            <div id="heatmapChart" class="plotly-chart"></div>
-          </div>
-
-          <div class="viz-card">
-            <div class="viz-title">Capacity vs Demand</div>
-            <div id="capacityChart" class="plotly-chart"></div>
+            <div class="viz-title">Best Solution - Area Allocation</div>
+            <div id="allocationChart" class="plotly-chart"></div>
           </div>
 
           <div class="viz-card">
             <div class="viz-title">Solution Details</div>
-            <div id="allocationStats"></div>
+            <div id="solutionDisplay"></div>
           </div>
         </div>
+
+        <details style="margin-top: 20px">
+          <summary style="cursor: pointer; color: var(--primary-color)">
+            View All Pareto Solutions (JSON)
+          </summary>
+          <pre
+            id="paretoOutput"
+            style="max-height: 400px; overflow: auto"
+          ></pre>
+        </details>
       </div>
     </div>
 
-    <script type="module" src="/src/landuse/landUseMain.ts"></script>
+    <script type="module" src="/src/threejs/main.ts"></script>
+    <script>
+      // Auto-detect and set default number of workers based on CPU cores
+      document.addEventListener("DOMContentLoaded", () => {
+        const numWorkersInput = document.getElementById("numWorkers");
+        const defaultWorkers = navigator.hardwareConcurrency || 4;
+        numWorkersInput.value = defaultWorkers;
+        numWorkersInput.placeholder = `Auto-detected: ${defaultWorkers}`;
+      });
+    </script>
   </body>
 </html>

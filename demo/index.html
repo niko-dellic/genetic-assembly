@@ -6,6 +6,41 @@
     <title>Genetic Assembly - NSGA-II Demo</title>
     <link rel="stylesheet" href="/styles/styles.css" />
     <style>
+      /* Navigation bar */
+      .nav-bar {
+        background: var(--background-color-light);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 25px;
+        border: 1px solid var(--border-color);
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .nav-bar a {
+        padding: 8px 16px;
+        background: var(--background-color);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-color);
+        transition: all 0.2s;
+        font-size: 14px;
+      }
+
+      .nav-bar a:hover {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+      }
+
+      .nav-bar a.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: transparent;
+      }
+
       /* Page-specific styles */
       .pareto-front {
         background: var(--background-color-light);
@@ -56,9 +91,11 @@
   </head>
   <body>
     <div class="container">
-      <a href="landuse.html" class="nav-link"
-        >🏢 Land Use Optimizer Example →</a
-      >
+      <nav class="nav-bar">
+        <a href="index.html" class="active">🔬 Basic NSGA-II</a>
+        <a href="landuse.html">🏢 Land Use Optimizer</a>
+        <a href="threejs.html">🎨 Three.js Integration</a>
+      </nav>
 
       <h1>🧬 Genetic Assembly - Parallel NSGA-II Demo</h1>
       <p class="subtitle">

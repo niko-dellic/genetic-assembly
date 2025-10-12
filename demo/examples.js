@@ -1,6 +1,6 @@
 // Example usage of genetic-assembly WASM APIs
 
-import init, { solve_json, solve_buffers } from "./pkg/genetic_assembly.js";
+import init, { solve_json, solve_buffers } from "../pkg/genetic_assembly.js";
 
 // Initialize the WASM module
 await init();
@@ -272,3 +272,123 @@ portfolioResult.pareto.forEach((portfolio, i) => {
     .filter(Boolean);
   console.log(`Portfolio ${i + 1}:`, selectedAssets.join(", "));
 });
+
+// ============================================================================
+// Example 6: Three.js Integration
+// ============================================================================
+
+console.log("\n=== Three.js Integration Example ===");
+
+// Note: This example shows the API usage pattern
+// In a real Three.js application, you would import THREE and create actual meshes
+
+import {
+  buildThreeJsSpec,
+  decodeThreeJsResult,
+  applyGenes,
+} from "../pkg/threejs-helpers.js";
+
+// Mock Three.js object for demonstration
+const createRoom = (userData) => ({
+  userData,
+  position: { toArray: () => [0, 0, 0], fromArray: (arr) => {} },
+  rotation: { x: 0, y: 0, z: 0, set: (x, y, z) => {} },
+  scale: { toArray: () => [1, 1, 1], fromArray: (arr) => {} },
+});
+
+// Create room with mutable and static userData
+const room = createRoom({
+  // Mutable properties (will be optimized)
+  restaurant: 1000,
+  residential: 2000,
+  retail: 500,
+  // Static properties (used for evaluation)
+  totalArea: 3500,
+  demandProfile: {
+    restaurant: { morning: 50, afternoon: 100, evening: 150 },
+    residential: { morning: 200, afternoon: 150, evening: 300 },
+    retail: { morning: 80, afternoon: 150, evening: 100 },
+  },
+  capacityPerUnit: { restaurant: 0.1, residential: 0.05, retail: 0.08 },
+});
+
+// Define mutation function (genes to userData)
+const mutationFn = (genes, staticProps) => ({
+  restaurant: genes[0] * staticProps.totalArea,
+  residential: genes[1] * staticProps.totalArea,
+  retail: genes[2] * staticProps.totalArea,
+});
+
+// Define evaluation function (calculate objectives)
+const evaluationFn = (userData, staticProps) => {
+  // Simplified objective calculation
+  const { restaurant, residential, retail } = userData;
+  const { demandProfile, capacityPerUnit } = staticProps;
+
+  // Objective 1: Minimize total overcrowding
+  let overcrowding = 0;
+  ["morning", "afternoon", "evening"].forEach((period) => {
+    const demand = Object.keys(demandProfile).reduce((sum, landUse) => {
+      return sum + demandProfile[landUse][period];
+    }, 0);
+    const capacity =
+      restaurant * capacityPerUnit.restaurant +
+      residential * capacityPerUnit.residential +
+      retail * capacityPerUnit.retail;
+    if (demand > capacity) {
+      overcrowding += demand - capacity;
+    }
+  });
+
+  // Objective 2: Minimize underutilization
+  let underutilization = 0;
+  ["morning", "afternoon", "evening"].forEach((period) => {
+    const demand = Object.keys(demandProfile).reduce((sum, landUse) => {
+      return sum + demandProfile[landUse][period];
+    }, 0);
+    const capacity =
+      restaurant * capacityPerUnit.restaurant +
+      residential * capacityPerUnit.residential +
+      retail * capacityPerUnit.retail;
+    if (capacity > demand * 1.2) {
+      // 20% buffer acceptable
+      underutilization += capacity - demand * 1.2;
+    }
+  });
+
+  return [overcrowding, underutilization];
+};
+
+// Build Three.js optimization spec
+// Note: Functions are automatically serialized for worker transfer
+// Functions must be self-contained (no closures - no external variable references)
+const threejsSpec = buildThreeJsSpec([room], {
+  mutableProps: ["restaurant", "residential", "retail"],
+  staticProps: ["totalArea", "demandProfile", "capacityPerUnit"],
+  mutationFn,
+  evaluationFn,
+  populationSize: 50,
+  generations: 100,
+  workers: false, // Set to true for parallel execution (functions will be serialized)
+});
+
+console.log("Running Three.js userData optimization...");
+const threejsResult = await solve_json(threejsSpec);
+
+console.log(
+  `Found ${threejsResult.stats.pareto_size} optimal room configurations`
+);
+console.log(`Execution time: ${threejsResult.executionTime}ms`);
+
+// Decode and apply best solution
+const roomSolutions = decodeThreeJsResult(threejsResult, threejsSpec);
+const bestRoomConfig = roomSolutions[0];
+
+console.log("\nBest room configuration:");
+console.log(`  Restaurant: ${bestRoomConfig.restaurant.toFixed(0)} sqft`);
+console.log(`  Residential: ${bestRoomConfig.residential.toFixed(0)} sqft`);
+console.log(`  Retail: ${bestRoomConfig.retail.toFixed(0)} sqft`);
+
+// Apply to Three.js object
+Object.assign(room.userData, bestRoomConfig);
+console.log("\nUpdated room.userData:", room.userData);

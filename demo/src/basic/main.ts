@@ -2,7 +2,6 @@
 import init, { solve_json } from "../../../pkg/index.js";
 import type { OptimizationSpec, OptimizationResult } from "../types/types.js";
 
-let startTime = 0;
 let wasmInitialized = false;
 
 // Initialize WASM on page load
@@ -191,8 +190,6 @@ function displayResults(result: OptimizationResult) {
     progress_interval: 10, // Callback every 10 generations
   };
 
-  startTime = performance.now();
-
   try {
     const result = await solve_json(
       spec,
@@ -210,11 +207,8 @@ function displayResults(result: OptimizationResult) {
       }
     );
 
-    const executionTime = Math.round(performance.now() - startTime);
-    displayResults({
-      ...result,
-      executionTime,
-    });
+    // executionTime is now automatically tracked in the result
+    displayResults(result);
     enableButton();
   } catch (error) {
     console.error("Optimization failed:", error);

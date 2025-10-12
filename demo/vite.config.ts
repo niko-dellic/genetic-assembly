@@ -1,16 +1,19 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  root: './demo',
+  root: ".",
   build: {
-    outDir: '../dist',
+    outDir: "./dist",
     emptyOutDir: true,
   },
   server: {
     port: 3000,
     open: true,
+    fs: {
+      allow: [".."],
+    },
   },
   optimizeDeps: {
-    exclude: ['genetic-assembly'],
+    exclude: ["genetic-assembly"],
   },
 });

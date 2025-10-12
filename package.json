@@ -1,14 +1,15 @@
 {
   "name": "genetic-assembly",
   "version": "1.0.0",
-  "description": "WebAssembly port of moors (NSGA-II/III) genetic algorithms",
+  "description": "WebAssembly-based Multi-Objective Optimization",
   "type": "module",
   "scripts": {
     "build:wasm": "wasm-pack build --target web --out-dir pkg --release",
-    "dev": "vite",
-    "build": "npm run build:wasm && vite build",
-    "preview": "vite preview",
-    "type-check": "tsc --noEmit"
+    "dev": "npm run build:wasm && cd demo && npm run dev",
+    "demo:install": "cd demo && npm install",
+    "demo:dev": "cd demo && npm run dev",
+    "demo:build": "npm run build:wasm && cd demo && npm run build",
+    "demo:preview": "cd demo && npm run preview"
   },
   "keywords": [
     "wasm",
@@ -17,14 +18,6 @@
     "nsga3",
     "multi-objective-optimization"
   ],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "@types/plotly.js": "^3.0.6",
-    "typescript": "^5.9.3",
-    "vite": "^7.1.9"
-  },
-  "dependencies": {
-    "plotly.js-dist": "^3.1.1"
-  }
+  "author": "nikodellic",
+  "license": "MIT"
 }

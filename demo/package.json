@@ -1,0 +1,31 @@
+{
+  "name": "genetic-assembly-demo",
+  "version": "1.0.0",
+  "description": "Interactive demos for WebAssembly-based Multi-Objective Optimization",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "wasm",
+    "genetic-algorithm",
+    "nsga2",
+    "nsga3",
+    "multi-objective-optimization",
+    "demo"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/plotly.js": "^3.0.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9"
+  },
+  "dependencies": {
+    "plotly.js-dist": "^3.1.1",
+    "three": "^0.180.0"
+  }
+}

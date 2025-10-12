@@ -95,6 +95,12 @@ function showError(message: string) {
 }
 
 function updateLiveProgress(data: any) {
+  // Only track progress from worker 0 to avoid chart jumping between workers
+  // Each worker reports its own generation count, causing the chart to bounce
+  if (data.workerId !== undefined && data.workerId !== 0) {
+    return; // Ignore progress from other workers for charting
+  }
+
   // Update generation counter
   showStatus(
     `Generation ${data.generation}: ${data.pareto_size} solutions`,

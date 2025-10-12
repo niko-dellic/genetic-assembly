@@ -3,6 +3,7 @@
 export interface ProgressData {
   generation: number;
   pareto_front: Solution[];
+  full_population: Solution[];
   pareto_size: number;
   population_size: number;
   workerId?: number; // Added by worker when forwarding

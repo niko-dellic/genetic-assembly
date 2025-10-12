@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "esModuleInterop": true
   },
-  "include": ["demo/src"]
+  "include": ["src"]
 }
