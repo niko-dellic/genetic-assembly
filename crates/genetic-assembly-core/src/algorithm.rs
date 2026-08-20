@@ -80,22 +80,7 @@ where
         generation += 1;
 
         let checkpoint = checkpoint(&problem, &config, generation, &population);
-        let front: Vec<_> = population
-            .iter()
-            .filter(|individual| individual.rank == 0)
-            .take(64)
-            .cloned()
-            .collect();
-        let summary = GenerationSummary {
-            generation,
-            population_size: population.len(),
-            pareto_size: population
-                .iter()
-                .filter(|individual| individual.rank == 0)
-                .count(),
-            evaluations,
-            sampled_front: front,
-        };
+        let summary = summarize_generation(generation, evaluations, &population);
         if observer(&checkpoint, &summary) == RunControl::Stop {
             break;
         }
@@ -192,6 +177,76 @@ fn rank_and_crowd(population: &mut [Individual], directions: &[ObjectiveDirectio
     let fronts = fast_non_dominated_sort(population, directions);
     for front in fronts {
         assign_crowding(population, &front, directions);
+    }
+}
+
+pub fn summarize_generation(
+    generation: usize,
+    evaluations: u64,
+    population: &[Individual],
+) -> GenerationSummary {
+    let objective_count = population
+        .first()
+        .map_or(0, |individual| individual.objectives.len());
+    let constraint_count = population
+        .first()
+        .map_or(0, |individual| individual.constraints.len());
+    let objective_stats = (0..objective_count)
+        .map(|index| numeric_statistics(population.iter().map(|item| item.objectives[index])))
+        .collect();
+    let constraint_stats = (0..constraint_count)
+        .map(|index| numeric_statistics(population.iter().map(|item| item.constraints[index])))
+        .collect();
+    let feasible_count = population
+        .iter()
+        .filter(|individual| individual.feasible())
+        .count();
+    GenerationSummary {
+        generation,
+        population_size: population.len(),
+        pareto_size: population
+            .iter()
+            .filter(|individual| individual.rank == 0)
+            .count(),
+        evaluations,
+        sampled_front: population
+            .iter()
+            .filter(|individual| individual.rank == 0)
+            .take(64)
+            .cloned()
+            .collect(),
+        objective_stats,
+        constraint_stats,
+        total_violation_stats: (!population.is_empty()).then(|| {
+            numeric_statistics(
+                population
+                    .iter()
+                    .map(|individual| individual.constraint_violation),
+            )
+        }),
+        feasible_count,
+        infeasible_count: population.len().saturating_sub(feasible_count),
+    }
+}
+
+fn numeric_statistics(values: impl Iterator<Item = f64>) -> NumericStatistics {
+    let values: Vec<_> = values.collect();
+    debug_assert!(!values.is_empty());
+    let count = values.len() as f64;
+    let mean = values.iter().sum::<f64>() / count;
+    let variance = values
+        .iter()
+        .map(|value| {
+            let delta = value - mean;
+            delta * delta
+        })
+        .sum::<f64>()
+        / count;
+    NumericStatistics {
+        min: values.iter().copied().fold(f64::INFINITY, f64::min),
+        max: values.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        mean,
+        stddev: variance.sqrt(),
     }
 }
 
@@ -443,5 +498,40 @@ mod tests {
         })
         .unwrap();
         assert_eq!(one.pareto_front, resumed.pareto_front);
+    }
+
+    #[test]
+    fn generation_statistics_cover_objectives_constraints_and_feasibility() {
+        let population = vec![
+            Individual {
+                id: 1,
+                genes: vec![0.0],
+                objectives: vec![1.0, 5.0],
+                constraints: vec![-1.0],
+                constraint_violation: 0.0,
+                rank: 0,
+                crowding_distance: 1.0,
+            },
+            Individual {
+                id: 2,
+                genes: vec![1.0],
+                objectives: vec![3.0, 9.0],
+                constraints: vec![2.0],
+                constraint_violation: 2.0,
+                rank: 1,
+                crowding_distance: 0.0,
+            },
+        ];
+        let summary = summarize_generation(4, 10, &population);
+        assert_eq!(summary.generation, 4);
+        assert_eq!(summary.pareto_size, 1);
+        assert_eq!(summary.feasible_count, 1);
+        assert_eq!(summary.infeasible_count, 1);
+        assert_eq!(summary.objective_stats[0].mean, 2.0);
+        assert_eq!(summary.objective_stats[0].stddev, 1.0);
+        assert_eq!(summary.objective_stats[1].min, 5.0);
+        assert_eq!(summary.objective_stats[1].max, 9.0);
+        assert_eq!(summary.constraint_stats[0].mean, 0.5);
+        assert_eq!(summary.total_violation_stats.unwrap().mean, 1.0);
     }
 }

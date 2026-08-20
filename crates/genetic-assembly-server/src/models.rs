@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
-use genetic_assembly_core::{GenerationSummary, Individual, Nsga2Config};
-use genetic_assembly_scene::{SceneManifest, ScenePatch};
+use genetic_assembly_core::{
+    GenerationSummary, Individual, Nsga2Config, ObjectiveDirection, Variable,
+};
+use genetic_assembly_scene::{LeverTarget, SceneManifest, ScenePatch};
 use genetic_assembly_script::{EvaluatorManifest, ScriptLimits};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -50,6 +52,42 @@ pub struct ResultMember {
 pub struct RunResultsResponse {
     pub run_id: Uuid,
     pub members: Vec<ResultMember>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct AnalyticsObjective {
+    pub index: usize,
+    pub name: String,
+    pub direction: ObjectiveDirection,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct AnalyticsLever {
+    pub index: usize,
+    pub id: String,
+    #[serde(flatten)]
+    pub variable: Variable,
+    pub target: LeverTarget,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct AnalyticsConstraint {
+    pub index: usize,
+    pub name: String,
+    pub feasible_when: &'static str,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RunAnalyticsResponse {
+    pub schema_version: u32,
+    pub run_id: Uuid,
+    pub status: String,
+    pub history_complete: bool,
+    pub objectives: Vec<AnalyticsObjective>,
+    pub levers: Vec<AnalyticsLever>,
+    pub constraints: Vec<AnalyticsConstraint>,
+    pub candidates: Vec<ResultMember>,
+    pub generations: Vec<GenerationSummary>,
 }
 
 #[derive(Clone, Debug, Serialize)]

@@ -125,6 +125,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/v1/runs/{id}", get(get_run))
         .route("/v1/runs/{id}/events", get(run_events))
         .route("/v1/runs/{id}/results", get(run_results))
+        .route("/v1/runs/{id}/analytics", get(run_analytics))
         .route("/v1/runs/{id}/cancel", post(cancel_run))
         .layer(DefaultBodyLimit::max(256 * 1024 * 1024))
         .layer(CorsLayer::permissive())
@@ -199,13 +200,12 @@ async fn create_scene(
     digest.update(&glb);
     digest.update(&manifest_bytes);
     let hash = hex::encode(digest.finalize());
-    if let Some((id, artifact_key)) =
-        sqlx::query_as::<_, (Uuid, String)>(
-            "SELECT id,artifact_key FROM scene_revisions WHERE content_hash=$1",
-        )
-            .bind(&hash)
-            .fetch_optional(&state.db)
-            .await?
+    if let Some((id, artifact_key)) = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT id,artifact_key FROM scene_revisions WHERE content_hash=$1",
+    )
+    .bind(&hash)
+    .fetch_optional(&state.db)
+    .await?
     {
         // A content hash can outlive local/S3 artifact storage (for example
         // after a development volume is recreated). Re-uploading the same
@@ -358,19 +358,28 @@ async fn run_results(
         if run.status == "failed" {
             return Err(ApiError::Conflict(format!(
                 "run failed: {}",
-                run.error.as_deref().unwrap_or("no failure reason was recorded")
+                run.error
+                    .as_deref()
+                    .unwrap_or("no failure reason was recorded")
             )));
         }
         return Err(ApiError::Conflict(format!("run is {}", run.status)));
     }
+    let members = fetch_front_members(&state.db, id).await?;
+    Ok(Json(RunResultsResponse {
+        run_id: id,
+        members,
+    }))
+}
+
+async fn fetch_front_members(db: &PgPool, id: Uuid) -> Result<Vec<ResultMember>, ApiError> {
     let rows = sqlx::query_as::<_, FrontRow>(
         "SELECT individual,patches FROM run_front_members WHERE run_id=$1 ORDER BY member_index",
     )
     .bind(id)
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await?;
-    let members = rows
-        .into_iter()
+    rows.into_iter()
         .map(|row| {
             Ok(ResultMember {
                 individual: serde_json::from_value(row.individual)
@@ -379,10 +388,105 @@ async fn run_results(
                     .map_err(|e| ApiError::Internal(e.to_string()))?,
             })
         })
-        .collect::<Result<Vec<_>, ApiError>>()?;
-    Ok(Json(RunResultsResponse {
+        .collect::<Result<Vec<_>, ApiError>>()
+}
+
+async fn run_analytics(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<RunAnalyticsResponse>, ApiError> {
+    let run = fetch_run(&state.db, id).await?;
+    let scene_manifest = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT scene_revisions.manifest FROM runs JOIN scene_revisions ON scene_revisions.id=runs.scene_revision_id WHERE runs.id=$1",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await?;
+    let evaluator_manifest = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT evaluator_revisions.manifest FROM runs JOIN evaluator_revisions ON evaluator_revisions.id=runs.evaluator_revision_id WHERE runs.id=$1",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await?;
+    let scene_manifest: SceneManifest = serde_json::from_value(scene_manifest)
+        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    let evaluator_manifest: EvaluatorManifest = serde_json::from_value(evaluator_manifest)
+        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    let generations = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT summary FROM generation_summaries WHERE run_id=$1 ORDER BY generation",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(|summary| {
+        serde_json::from_value(summary).map_err(|error| ApiError::Internal(error.to_string()))
+    })
+    .collect::<Result<Vec<genetic_assembly_core::GenerationSummary>, ApiError>>()?;
+    let candidates = fetch_front_members(&state.db, id).await?;
+    let constraint_count = evaluator_manifest
+        .constraints
+        .len()
+        .max(
+            candidates
+                .first()
+                .map_or(0, |member| member.individual.constraints.len()),
+        )
+        .max(
+            generations
+                .iter()
+                .map(|summary| summary.constraint_stats.len())
+                .max()
+                .unwrap_or(0),
+        );
+    let history_complete = !generations.is_empty()
+        && generations.iter().all(|summary| {
+            summary.objective_stats.len() == evaluator_manifest.objectives.len()
+                && summary.constraint_stats.len() == constraint_count
+                && summary.total_violation_stats.is_some()
+                && summary.feasible_count + summary.infeasible_count == summary.population_size
+        });
+    let objectives = evaluator_manifest
+        .objectives
+        .into_iter()
+        .enumerate()
+        .map(|(index, objective)| AnalyticsObjective {
+            index,
+            name: objective.name,
+            direction: objective.direction,
+        })
+        .collect();
+    let levers = scene_manifest
+        .levers
+        .into_iter()
+        .enumerate()
+        .map(|(index, lever)| AnalyticsLever {
+            index,
+            id: lever.id,
+            variable: lever.variable,
+            target: lever.target,
+        })
+        .collect();
+    let constraints = (0..constraint_count)
+        .map(|index| AnalyticsConstraint {
+            index,
+            name: evaluator_manifest.constraints.get(index).map_or_else(
+                || format!("Constraint {}", index + 1),
+                |constraint| constraint.name.clone(),
+            ),
+            feasible_when: "lte_zero",
+        })
+        .collect();
+    Ok(Json(RunAnalyticsResponse {
+        schema_version: 1,
         run_id: id,
-        members,
+        status: run.status,
+        history_complete,
+        objectives,
+        levers,
+        constraints,
+        candidates,
+        generations,
     }))
 }
 

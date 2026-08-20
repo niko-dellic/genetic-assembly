@@ -3,8 +3,13 @@
     "target": "ES2022",
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "types": ["vite/client"],
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@genetic-assembly/visualizations": ["../visualizations/src/index.ts"]
+    },
     "resolveJsonModule": true,
     "strict": true,
     "noUnusedLocals": true,

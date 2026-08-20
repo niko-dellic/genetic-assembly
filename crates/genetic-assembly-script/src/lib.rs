@@ -22,10 +22,17 @@ thread_local! {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Constraint {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct EvaluatorManifest {
     #[serde(default = "api_version")]
     pub api_version: u32,
     pub objectives: Vec<Objective>,
+    #[serde(default)]
+    pub constraints: Vec<Constraint>,
 }
 
 const fn api_version() -> u32 {
@@ -114,6 +121,14 @@ pub fn validate_evaluator_manifest(manifest: &EvaluatorManifest) -> Result<(), S
             "objective names must be non-empty and unique".into(),
         ));
     }
+    names.clear();
+    if manifest.constraints.iter().any(|constraint| {
+        constraint.name.trim().is_empty() || !names.insert(constraint.name.as_str())
+    }) {
+        return Err(ScriptError::Validation(
+            "constraint names must be non-empty and unique".into(),
+        ));
+    }
     Ok(())
 }
 
@@ -142,6 +157,15 @@ impl Evaluator for ScriptEvaluator {
                     "evaluator returned {} objectives, manifest declares {}",
                     evaluation.objectives.len(),
                     self.manifest.objectives.len()
+                )));
+            }
+            if !self.manifest.constraints.is_empty()
+                && evaluation.constraints.len() != self.manifest.constraints.len()
+            {
+                return Err(EvaluationError::new(format!(
+                    "evaluator returned {} constraints, manifest declares {}",
+                    evaluation.constraints.len(),
+                    self.manifest.constraints.len()
                 )));
             }
             Ok(evaluation)

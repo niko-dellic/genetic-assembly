@@ -118,12 +118,30 @@ pub struct Checkpoint {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct NumericStatistics {
+    pub min: f64,
+    pub max: f64,
+    pub mean: f64,
+    pub stddev: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct GenerationSummary {
     pub generation: usize,
     pub population_size: usize,
     pub pareto_size: usize,
     pub evaluations: u64,
     pub sampled_front: Vec<Individual>,
+    #[serde(default)]
+    pub objective_stats: Vec<NumericStatistics>,
+    #[serde(default)]
+    pub constraint_stats: Vec<NumericStatistics>,
+    #[serde(default)]
+    pub total_violation_stats: Option<NumericStatistics>,
+    #[serde(default)]
+    pub feasible_count: usize,
+    #[serde(default)]
+    pub infeasible_count: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

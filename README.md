@@ -36,7 +36,9 @@ The baseline scene and its indexed mesh buffers are loaded once per run. Each ca
 - Restricted trusted-project JavaScript evaluators in QuickJS with memory, stack, and execution limits.
 - Axum APIs, SSE progress, cooperative cancellation, Postgres job leasing, restart recovery, and versioned MessagePack+zstd checkpoints.
 - Content-addressed local or S3-compatible artifact storage.
-- A typed TypeScript client with GLB export, event subscription, result retrieval, candidate preview, and revert.
+- A typed TypeScript client with GLB export, event subscription, analytics/result retrieval, candidate preview, and revert.
+- A React analytics workspace with linked Pareto, parallel-coordinate, diamond-fitness, lever, constraint, and convergence views.
+- Framework-neutral D3/Three.js renderers in `@genetic-assembly/visualizations`, each with `update`, `resize`, and `destroy` lifecycle methods.
 
 ## Quick start
 
@@ -117,6 +119,7 @@ Supported v1 input is static `Scene`, `Group`, `Mesh`, and triangle `BufferGeome
 | `GET` | `/v1/runs/{id}` | Read status, generation, timing, and errors. |
 | `GET` | `/v1/runs/{id}/events` | Stream bounded status, generation, and checkpoint events over SSE. |
 | `GET` | `/v1/runs/{id}/results` | Read the final ordered Pareto front and Three.js patches. |
+| `GET` | `/v1/runs/{id}/analytics` | Read objective/lever/constraint schemas, final candidates, and ordered full-population generation summaries. |
 | `POST` | `/v1/runs/{id}/cancel` | Request cooperative cancellation between evaluation batches. |
 
 ## Development
@@ -127,7 +130,7 @@ npm run build
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-The Rust workspace is split into `genetic-assembly-core`, `genetic-assembly-scene`, `genetic-assembly-script`, and `genetic-assembly-server`. The `client` directory is the publishable TypeScript package; `demo` is a server-backed integration example.
+The Rust workspace is split into `genetic-assembly-core`, `genetic-assembly-scene`, `genetic-assembly-script`, and `genetic-assembly-server`. The `client` directory is the publishable TypeScript client; `visualizations` contains framework-neutral renderers; `demo` is the React server-backed integration workspace.
 
 Current trust boundary: evaluator scripts are trusted project-authored code. QuickJS removes ambient filesystem, network, imports, wall-clock time, and randomness and enforces runtime limits, but it is not a hostile multi-tenant sandbox. Run the service on localhost or behind authentication for trusted teams.
 

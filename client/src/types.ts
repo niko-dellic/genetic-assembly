@@ -25,7 +25,12 @@ export interface ManifestObject {
 export interface SceneManifest { schema_version?: 1; objects?: ManifestObject[]; levers: LeverSpec[] }
 
 export interface Objective { name: string; direction: "minimize" | "maximize" }
-export interface EvaluatorManifest { api_version?: 1; objectives: Objective[] }
+export interface ConstraintDefinition { name: string }
+export interface EvaluatorManifest {
+  api_version?: 1;
+  objectives: Objective[];
+  constraints?: ConstraintDefinition[];
+}
 export interface ScriptLimits { memory_bytes?: number; stack_bytes?: number; timeout_ms?: number }
 export interface Nsga2Config {
   population_size?: number;
@@ -50,9 +55,40 @@ export interface Individual {
 export interface ScenePatch { lever_id: string; target: LeverTarget; value: number }
 export interface ResultMember { individual: Individual; patches: ScenePatch[] }
 export interface RunResults { run_id: string; members: ResultMember[] }
+export interface NumericStatistics { min: number; max: number; mean: number; stddev: number }
+export interface GenerationAnalytics {
+  generation: number;
+  population_size: number;
+  pareto_size: number;
+  evaluations: number;
+  sampled_front: Individual[];
+  objective_stats: NumericStatistics[];
+  constraint_stats: NumericStatistics[];
+  total_violation_stats?: NumericStatistics;
+  feasible_count: number;
+  infeasible_count: number;
+}
+export interface AnalyticsObjective extends Objective { index: number }
+export type AnalyticsLever = LeverSpec & { index: number };
+export interface AnalyticsConstraint {
+  index: number;
+  name: string;
+  feasible_when: "lte_zero";
+}
+export interface RunAnalytics {
+  schema_version: 1;
+  run_id: string;
+  status: RunStatus["status"];
+  history_complete: boolean;
+  objectives: AnalyticsObjective[];
+  levers: AnalyticsLever[];
+  constraints: AnalyticsConstraint[];
+  candidates: ResultMember[];
+  generations: GenerationAnalytics[];
+}
 export type RunEvent =
   | { type: "status"; run_id: string; status: string }
-  | { type: "generation"; run_id: string; summary: { generation: number; population_size: number; pareto_size: number; evaluations: number; sampled_front: Individual[] } }
+  | { type: "generation"; run_id: string; summary: GenerationAnalytics }
   | { type: "checkpoint"; run_id: string; generation: number }
   | { type: "completed"; run_id: string; pareto_size: number }
   | { type: "failed"; run_id: string; error: string };

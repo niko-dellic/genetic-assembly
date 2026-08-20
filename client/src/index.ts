@@ -1,7 +1,7 @@
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import type { Material, Object3D, Scene } from "three";
 import type {
-  EvaluatorManifest, Nsga2Config, ResultMember, Revision, RunEvent, RunResults, ScriptLimits,
+  EvaluatorManifest, Nsga2Config, ResultMember, Revision, RunAnalytics, RunEvent, RunResults, ScriptLimits,
   RunStatus, SceneManifest, ScenePatch,
 } from "./types.js";
 export * from "./types.js";
@@ -69,6 +69,7 @@ export class GeneticAssemblyClient {
 
   getRun(id: string): Promise<RunStatus> { return this.request(`/v1/runs/${id}`); }
   getResults(id: string): Promise<RunResults> { return this.request(`/v1/runs/${id}/results`); }
+  getAnalytics(id: string): Promise<RunAnalytics> { return this.request(`/v1/runs/${id}/analytics`); }
   cancel(id: string): Promise<RunStatus> { return this.request(`/v1/runs/${id}/cancel`, { method: "POST" }); }
 
   async subscribe(id: string, onEvent: (event: RunEvent) => void, signal?: AbortSignal): Promise<void> {
