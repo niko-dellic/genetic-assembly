@@ -38,6 +38,7 @@ The baseline scene and its indexed mesh buffers are loaded once per run. Each ca
 - Content-addressed local or S3-compatible artifact storage.
 - A typed TypeScript client with GLB export, event subscription, analytics/result retrieval, candidate preview, and revert.
 - A React analytics workspace with linked Pareto, parallel-coordinate, diamond-fitness, lever, constraint, and convergence views.
+- Selectable scene/evaluator examples, including a three-anchor facility-location benchmark with a genuine three-objective Pareto surface.
 - Framework-neutral D3/Three.js renderers in `@genetic-assembly/visualizations`, each with `update`, `resize`, and `destroy` lifecycle methods.
 
 ## Quick start

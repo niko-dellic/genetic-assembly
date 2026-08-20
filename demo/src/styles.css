@@ -43,6 +43,25 @@ button { color: inherit; }
 .controls-pane { border-right: 1px solid var(--border); overflow: auto; }
 .control-section { padding: 17px; border-bottom: 1px solid var(--border); }
 .project-summary { padding-top: 20px; }
+.problem-picker { position: relative; z-index: 30; padding: 12px; background: #0b0b0e; }
+.problem-current-card { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: inherit; cursor: pointer; text-align: left; transition: border-color .15s, background .15s; }
+.problem-current-card:hover, .problem-picker[data-open="true"] .problem-current-card { border-color: #45454d; background: #15151a; }
+.problem-current-card:disabled { cursor: not-allowed; opacity: .65; }
+.problem-card-heading { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 8px; }
+.problem-card-heading h1 { font-size: 14px; line-height: 1.2; white-space: normal; }
+.problem-icon { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #37373e; border-radius: 7px; background: #1b1b20; color: var(--accent); }
+.problem-chevron { color: var(--subtle); transition: transform .16s; }
+.problem-picker[data-open="true"] .problem-chevron { transform: rotate(180deg); }
+.problem-current-card p { margin: 11px 0 13px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.problem-tray { position: absolute; z-index: 40; top: calc(100% - 5px); right: 12px; left: 12px; display: grid; gap: 5px; padding: 7px; border: 1px solid var(--border-strong); border-radius: 8px; background: #111115; box-shadow: 0 18px 44px rgba(0,0,0,.58); }
+.problem-tray-label { padding: 3px 5px 5px; color: var(--subtle); font-size: 9px; }
+.problem-option { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 8px; width: 100%; padding: 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #d4d4d8; cursor: pointer; text-align: left; }
+.problem-option:hover { background: #1b1b20; }
+.problem-option[data-selected="true"] { border-color: rgba(45,212,191,.3); background: rgba(45,212,191,.055); }
+.problem-option .problem-icon { width: 27px; height: 27px; }
+.problem-option strong, .problem-option small { display: block; }
+.problem-option strong { font-size: 10px; }
+.problem-option small { margin-top: 3px; color: var(--subtle); font-size: 8px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .section-heading.compact { align-items: center; }
 .eyebrow { color: var(--subtle); font-size: 10px; font-weight: 700; letter-spacing: .085em; text-transform: uppercase; }
@@ -112,6 +131,9 @@ h3 { font-size: 12px; font-weight: 650; }
 .chart { width: 100%; min-width: 0; height: 210px; color: var(--muted); }
 .chart-large { height: 260px; }.chart-medium { height: 220px; }.chart-small { height: 170px; }
 .chart svg, .chart canvas { display: block; width: 100%; height: 100%; }
+.viz-3d-labels { position: absolute; right: 8px; bottom: 7px; left: 8px; display: flex; justify-content: space-between; gap: 5px; pointer-events: none; }
+.viz-3d-labels span { overflow: hidden; padding: 3px 5px; border: 1px solid rgba(255,255,255,.08); border-radius: 4px; background: rgba(9,9,11,.72); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.viz-3d-labels span[data-axis="0"] { color: #2dd4bf; }.viz-3d-labels span[data-axis="1"] { color: #f59e0b; }.viz-3d-labels span[data-axis="2"] { color: #a78bfa; }
 .chart svg { overflow: visible; }
 .chart svg text { fill: #8b8b95; font-size: 8px; }
 .chart svg .domain, .chart svg .tick line { stroke: #35353b; }

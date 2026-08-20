@@ -6,9 +6,10 @@ import {
 } from "../../client/src/index.js";
 import { useWorkspace } from "./app-state.js";
 import { AnalyticsPane } from "./components/analytics-pane.js";
+import { ProblemPicker } from "./components/problem-picker.js";
 import { SceneView, type SceneHandle } from "./components/scene-view.js";
 import { Badge, Button, Input, Tooltip } from "./components/ui.js";
-import { evaluatorManifest, evaluatorSource, sceneManifest } from "./problem.js";
+import { defaultProblem, type OptimizationProblem } from "./problem.js";
 
 const api = new GeneticAssemblyClient(import.meta.env.VITE_GA_SERVER_URL || "http://127.0.0.1:3001");
 
@@ -16,6 +17,7 @@ export function App() {
   const { state, dispatch } = useWorkspace();
   const sceneHandle = useRef<SceneHandle | undefined>(undefined);
   const activeRun = useRef<string | undefined>(undefined);
+  const [selectedProblem, setSelectedProblem] = useState(defaultProblem);
   const [server, setServer] = useState<"checking" | "connected" | "unavailable">("checking");
   const [population, setPopulation] = useState(64);
   const [generations, setGenerations] = useState(50);
@@ -28,6 +30,16 @@ export function App() {
     return candidate && Array.isArray(candidate.patches) ? candidate : undefined;
   }, [state.dataset.candidates, state.activeId]);
 
+  function selectProblem(problem: OptimizationProblem) {
+    if (problem.id === selectedProblem.id || running) return;
+    sceneHandle.current?.preview.revert();
+    sceneHandle.current = undefined;
+    setSelectedProblem(problem);
+    setPopulation(problem.recommendedPopulation);
+    setGenerations(problem.recommendedGenerations);
+    dispatch({ type: "problem-selected", problem });
+  }
+
   useEffect(() => {
     let live = true;
     fetch(`${api.baseUrl}/health`).then((response) => { if (!response.ok) throw new Error(); if (live) setServer("connected"); })
@@ -39,10 +51,10 @@ export function App() {
     if (!sceneHandle.current) return;
     dispatch({ type: "new-run", message: "Exporting immutable scene geometry…" });
     try {
-      const exported = await exportScene(sceneHandle.current.scene, sceneManifest);
+      const exported = await exportScene(sceneHandle.current.scene, selectedProblem.sceneManifest);
       const sceneRevision = await api.uploadScene(exported.glb, exported.manifest);
       dispatch({ type: "run-status", status: "preparing", message: "Validating evaluator contract…" });
-      const evaluatorRevision = await api.createEvaluator(evaluatorSource, evaluatorManifest);
+      const evaluatorRevision = await api.createEvaluator(selectedProblem.evaluatorSource, selectedProblem.evaluatorManifest);
       const run = await api.startRun(sceneRevision.id, evaluatorRevision.id, {
         population_size: validInteger(population, "Population"), generations: validInteger(generations, "Generations"),
         threads: threads.trim() ? validInteger(Number(threads), "Worker threads") : undefined, seed: 42,
@@ -88,11 +100,7 @@ export function App() {
     </header>
     <main className="workspace">
       <aside className="controls-pane">
-        <section className="control-section project-summary">
-          <div className="section-heading"><div><div className="eyebrow">Current problem</div><h1>Two-target placement</h1></div><Badge>NSGA-II</Badge></div>
-          <p>Move one volume between competing targets while maintaining zero overlap with the central obstacle.</p>
-          <div className="problem-stats"><span><strong>2</strong> levers</span><span><strong>2</strong> objectives</span><span><strong>1</strong> constraint</span></div>
-        </section>
+        <ProblemPicker selected={selectedProblem} disabled={running} onSelect={selectProblem} />
         <section className="control-section">
           <div className="eyebrow">Run configuration</div>
           <div className="field-grid">
@@ -110,8 +118,8 @@ export function App() {
         </section>
       </aside>
       <section className="scene-pane">
-        <header className="scene-toolbar"><div><div className="eyebrow">Scene preview</div><strong>Placement study.glb</strong></div><div className="scene-actions"><div className="legend"><span><i className="swatch movable" />Movable</span><span><i className="swatch obstacle" />Obstacle</span><span><i className="swatch target" />Target</span></div><Tooltip label="Restore the scene's original values"><Button variant="outline" onClick={() => dispatch({ type: "active" })}><RotateCcw size={13} /> Revert</Button></Tooltip><Button variant="outline" className="analytics-mobile-trigger" onClick={() => dispatch({ type: "analytics-open", open: true })}><Activity size={14} /> Analytics</Button></div></header>
-        <SceneView active={activeCandidate} onReady={onSceneReady} />
+        <header className="scene-toolbar"><div><div className="eyebrow">Scene preview</div><strong>{selectedProblem.sceneName}</strong></div><div className="scene-actions"><div className="legend"><span><i className="swatch movable" />Facility</span><span><i className="swatch obstacle" />Obstacle</span><span><i className="swatch target" />{selectedProblem.id === "three-anchor" ? "Anchors A–C" : "Target"}</span></div><Tooltip label="Restore the scene's original values"><Button variant="outline" onClick={() => dispatch({ type: "active" })}><RotateCcw size={13} /> Revert</Button></Tooltip><Button variant="outline" className="analytics-mobile-trigger" onClick={() => dispatch({ type: "analytics-open", open: true })}><Activity size={14} /> Analytics</Button></div></header>
+        <SceneView active={activeCandidate} problem={selectedProblem} onReady={onSceneReady} />
         {state.activeId !== undefined && <div className="scene-selection"><span className="active-color" /> Previewing candidate #{state.activeId}{!activeCandidate && <small> · geometry patch available when run completes</small>}</div>}
       </section>
       <div className="resize-handle" onPointerDown={beginResize} role="separator" aria-label="Resize analytics pane" aria-orientation="vertical"><Maximize2 size={11} /></div>

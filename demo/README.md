@@ -17,4 +17,6 @@ npm run dev
 
 Open the URL printed in the terminal. The demo prefers `http://127.0.0.1:3333`; when that port is occupied it selects the next available port. The page expects the API at `http://127.0.0.1:3001`.
 
-The example optimizes the X/Z position of one box against two competing target distances while requiring zero AABB overlap with an obstacle. The right pane offers Pareto and parallel-coordinate exploration, pinned diamond/lever/constraint comparison, convergence history, and an on-demand virtualized candidate table. Below 900px it becomes a bottom sheet so the Three.js scene remains bounded and visible.
+The current-problem card expands into a problem tray before a run begins. It includes the original two-target placement study and a three-anchor facility-location benchmark whose non-collinear distance objectives produce an orbitable three-dimensional Pareto surface. Choosing a problem replaces the Three.js scene, evaluator contract, recommended solver settings, and analytics schema together.
+
+The right pane offers Pareto and parallel-coordinate exploration, pinned diamond/lever/constraint comparison, convergence history, and an on-demand virtualized candidate table. Below 900px it becomes a bottom sheet so the Three.js scene remains bounded and visible.

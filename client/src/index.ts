@@ -41,7 +41,7 @@ export async function exportScene(scene: Scene, manifest: SceneManifest): Promis
   const viewerObjects: Object3D[] = [];
   exportRoot.traverse((object) => {
     const flags = object as Object3D & { isCamera?: boolean; isLight?: boolean };
-    if (flags.isCamera || flags.isLight) viewerObjects.push(object);
+    if (flags.isCamera || flags.isLight || object.userData.gaViewerOnly === true) viewerObjects.push(object);
   });
   for (const object of viewerObjects) object.removeFromParent();
   const output = await new GLTFExporter().parseAsync(exportRoot, { binary: true, onlyVisible: false });

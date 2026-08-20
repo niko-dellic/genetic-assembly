@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
 import type { GenerationAnalytics, RunAnalytics } from "../../client/src/index.js";
 import type { OptimizationDataset } from "@genetic-assembly/visualizations";
-import { evaluatorManifest, sceneManifest } from "./problem.js";
+import { defaultProblem, type OptimizationProblem } from "./problem.js";
 
 export interface WorkspaceState {
   dataset: OptimizationDataset;
@@ -19,6 +19,7 @@ export interface WorkspaceState {
 }
 
 type Action =
+  | { type: "problem-selected"; problem: OptimizationProblem }
   | { type: "new-run"; runId?: string; message?: string }
   | { type: "run-status"; status: string; progress?: number; message?: string; tone?: WorkspaceState["tone"] }
   | { type: "generation"; summary: GenerationAnalytics; total: number }
@@ -29,24 +30,29 @@ type Action =
   | { type: "filter"; ids?: Set<number> }
   | { type: "analytics-open"; open: boolean };
 
-function baseDataset(): OptimizationDataset {
+export function datasetForProblem(problem: OptimizationProblem): OptimizationDataset {
   return {
-    objectives: evaluatorManifest.objectives.map((objective, index) => ({ ...objective, index })),
-    levers: sceneManifest.levers.map((lever, index) => ({ ...lever, index })),
-    constraints: (evaluatorManifest.constraints ?? []).map((constraint, index) => ({ ...constraint, index, feasible_when: "lte_zero" })),
+    objectives: problem.evaluatorManifest.objectives.map((objective, index) => ({ ...objective, index })),
+    levers: problem.sceneManifest.levers.map((lever, index) => ({ ...lever, index })),
+    constraints: (problem.evaluatorManifest.constraints ?? []).map((constraint, index) => ({ ...constraint, index, feasible_when: "lte_zero" })),
     candidates: [], generations: [], history_complete: true,
   };
 }
 
+function emptyDataset(dataset: OptimizationDataset): OptimizationDataset {
+  return { ...dataset, candidates: [], generations: [], history_complete: true };
+}
+
 const initialState: WorkspaceState = {
-  dataset: baseDataset(), runStatus: "idle", progress: 0,
+  dataset: datasetForProblem(defaultProblem), runStatus: "idle", progress: 0,
   message: "Ready to start a server-side optimization.", tone: "neutral",
   pinnedIds: [], analyticsOpen: false,
 };
 
 function reducer(state: WorkspaceState, action: Action): WorkspaceState {
   switch (action.type) {
-    case "new-run": return { ...initialState, dataset: baseDataset(), runId: action.runId, runStatus: action.runId ? "queued" : "preparing", message: action.message ?? "Preparing run…" };
+    case "problem-selected": return { ...initialState, dataset: datasetForProblem(action.problem), message: `${action.problem.name} loaded. Ready to optimize.` };
+    case "new-run": return { ...initialState, dataset: emptyDataset(state.dataset), runId: action.runId, runStatus: action.runId ? "queued" : "preparing", message: action.message ?? "Preparing run…" };
     case "run-status": return { ...state, runStatus: action.status, progress: action.progress ?? state.progress, message: action.message ?? state.message, tone: action.tone ?? state.tone };
     case "generation": return {
       ...state, runStatus: "running", progress: Math.min(1, action.summary.generation / action.total),
