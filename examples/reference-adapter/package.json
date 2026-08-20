@@ -1,0 +1,18 @@
+{
+  "name": "@genetic-assembly/reference-adapter",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node dist/conformance.js"
+  },
+  "dependencies": {
+    "@genetic-assembly/adapter-sdk": "file:../../adapter-sdk"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "typescript": "^5.9.3"
+  }
+}

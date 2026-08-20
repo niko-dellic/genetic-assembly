@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use genetic_assembly_adapter::{AdapterLaunch, MaterializedCandidate, ProblemBundle};
 use genetic_assembly_core::{
     GenerationSummary, Individual, Nsga2Config, ObjectiveDirection, Variable,
 };
@@ -18,10 +19,35 @@ pub struct CreateEvaluatorRequest {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct CreateRunRequest {
-    pub scene_revision_id: Uuid,
-    pub evaluator_revision_id: Uuid,
+    #[serde(default)]
+    pub scene_revision_id: Option<Uuid>,
+    #[serde(default)]
+    pub evaluator_revision_id: Option<Uuid>,
+    #[serde(default)]
+    pub problem_revision_id: Option<Uuid>,
+    #[serde(default)]
+    pub adapter_revision_id: Option<Uuid>,
     #[serde(default)]
     pub config: Nsga2Config,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct CreateProblemRequest {
+    pub bundle: ProblemBundle,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct CreateAdapterRequest {
+    pub launch: AdapterLaunch,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ArtifactResponse {
+    pub id: Uuid,
+    pub content_hash: String,
+    pub artifact_key: String,
+    pub media_type: Option<String>,
+    pub byte_length: usize,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -46,6 +72,8 @@ pub struct RunStatusResponse {
 pub struct ResultMember {
     pub individual: Individual,
     pub patches: Vec<ScenePatch>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub materialization: Option<MaterializedCandidate>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -67,7 +95,8 @@ pub struct AnalyticsLever {
     pub id: String,
     #[serde(flatten)]
     pub variable: Variable,
-    pub target: LeverTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<LeverTarget>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -90,7 +119,7 @@ pub struct RunAnalyticsResponse {
     pub generations: Vec<GenerationSummary>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RunEvent {
     Status {
@@ -115,13 +144,51 @@ pub enum RunEvent {
     },
 }
 
+impl RunEvent {
+    pub fn run_id(&self) -> Uuid {
+        match self {
+            Self::Status { run_id, .. }
+            | Self::Generation { run_id, .. }
+            | Self::Checkpoint { run_id, .. }
+            | Self::Completed { run_id, .. }
+            | Self::Failed { run_id, .. } => *run_id,
+        }
+    }
+}
+
 #[derive(Debug, FromRow)]
 pub struct ClaimedRun {
     pub id: Uuid,
-    pub scene_revision_id: Uuid,
-    pub evaluator_revision_id: Uuid,
+    pub scene_revision_id: Option<Uuid>,
+    pub evaluator_revision_id: Option<Uuid>,
+    pub problem_revision_id: Option<Uuid>,
+    pub adapter_revision_id: Option<Uuid>,
     pub config: serde_json::Value,
     pub checkpoint_key: Option<String>,
+}
+
+#[derive(Debug, FromRow)]
+pub struct ProblemRow {
+    pub bundle: serde_json::Value,
+    pub content_hash: String,
+}
+
+impl ProblemRow {
+    pub fn parsed_bundle(&self) -> Result<ProblemBundle, serde_json::Error> {
+        serde_json::from_value(self.bundle.clone())
+    }
+}
+
+#[derive(Debug, FromRow)]
+pub struct AdapterRow {
+    pub launch: serde_json::Value,
+    pub content_hash: String,
+}
+
+impl AdapterRow {
+    pub fn parsed_launch(&self) -> Result<AdapterLaunch, serde_json::Error> {
+        serde_json::from_value(self.launch.clone())
+    }
 }
 
 #[derive(Debug, FromRow)]

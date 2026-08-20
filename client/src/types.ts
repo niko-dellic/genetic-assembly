@@ -51,9 +51,24 @@ export interface RunStatus {
 export interface Individual {
   id: number; genes: number[]; objectives: number[]; constraints: number[];
   constraint_violation: number; rank: number; crowding_distance: number;
+  evidence?: {
+    artifact_key?: string;
+    metadata?: Record<string, string>;
+    warnings?: string[];
+    runtime_ms?: number;
+  };
 }
 export interface ScenePatch { lever_id: string; target: LeverTarget; value: number }
-export interface ResultMember { individual: Individual; patches: ScenePatch[] }
+export interface ResultMember {
+  individual: Individual;
+  patches: ScenePatch[];
+  materialization?: {
+    id: number;
+    artifact_key?: string;
+    media_type?: string;
+    data: unknown;
+  };
+}
 export interface RunResults { run_id: string; members: ResultMember[] }
 export interface NumericStatistics { min: number; max: number; mean: number; stddev: number }
 export interface GenerationAnalytics {

@@ -1,7 +1,7 @@
 {
-  "name": "@genetic-assembly/three-client",
+  "name": "@genetic-assembly/three",
   "version": "0.2.0",
-  "description": "Three.js client for the Genetic Assembly Rust NSGA-II server",
+  "description": "Three.js integration for the Genetic Assembly companion",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

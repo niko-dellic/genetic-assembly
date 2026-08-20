@@ -1,0 +1,19 @@
+{
+  "name": "@genetic-assembly/adapter-sdk",
+  "version": "0.2.0",
+  "description": "TypeScript SDK and conformance harness for Genetic Assembly adapters",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "schemas"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/conformance.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}

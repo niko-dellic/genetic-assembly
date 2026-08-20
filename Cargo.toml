@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/genetic-assembly-adapter",
   "crates/genetic-assembly-core",
   "crates/genetic-assembly-scene",
   "crates/genetic-assembly-script",
@@ -23,6 +24,7 @@ futures = "0.3"
 glam = { version = "0.30", features = ["serde"] }
 gltf = { version = "1.4.1", features = ["import", "names", "extras"] }
 hex = "0.4"
+libc = "0.2"
 object_store = { version = "0.14.1", features = ["aws"] }
 rand = "0.9"
 rand_chacha = { version = "0.9", features = ["serde"] }

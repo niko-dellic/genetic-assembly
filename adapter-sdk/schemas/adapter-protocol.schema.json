@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genetic-assembly.dev/schemas/adapter-protocol-v1.json",
+  "title": "Genetic Assembly Adapter NDJSON Envelope v1",
+  "type": "object",
+  "required": ["protocol_version", "request_id", "type"],
+  "properties": {
+    "protocol_version": { "const": "genetic-assembly-adapter-v1" },
+    "request_id": { "type": "integer", "minimum": 0 },
+    "type": {
+      "enum": [
+        "initialize", "initialized", "seed_population", "population_seeded",
+        "make_offspring", "offspring_created", "evaluate_batch", "batch_evaluated",
+        "validate_front", "front_validated", "materialize", "materialized",
+        "cancel", "cancelled", "shutdown", "error"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

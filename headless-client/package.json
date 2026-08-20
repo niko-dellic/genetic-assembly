@@ -1,0 +1,17 @@
+{
+  "name": "@genetic-assembly/client",
+  "version": "0.2.0",
+  "description": "Framework-independent client for the Genetic Assembly companion",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}

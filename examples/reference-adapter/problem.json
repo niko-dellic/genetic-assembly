@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "Stochastic delivery network",
+  "variable_ids": ["warehouses", "electric-vans", "staff", "automation"],
+  "problem": {
+    "variables": [
+      { "kind": "integer", "lower": 1, "upper": 12, "step": 1 },
+      { "kind": "integer", "lower": 1, "upper": 20, "step": 1 },
+      { "kind": "integer", "lower": 2, "upper": 30, "step": 1 },
+      { "kind": "binary" }
+    ],
+    "objectives": [
+      { "name": "Operating cost", "direction": "minimize" },
+      { "name": "Mean delivery time", "direction": "minimize" },
+      { "name": "Emissions", "direction": "minimize" }
+    ]
+  },
+  "constraints": [
+    { "name": "Demand capacity", "feasible_when": "lte_zero" },
+    { "name": "Capital budget", "feasible_when": "lte_zero" }
+  ],
+  "metadata": {
+    "description": "A non-spatial adapter fixture with domain repair and deterministic multi-seed evaluation."
+  }
+}

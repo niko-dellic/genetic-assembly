@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genetic-assembly.dev/schemas/adapter-launch-v1.json",
+  "title": "Genetic Assembly adapter launch revision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "adapter_version", "command"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "adapter_version": { "type": "string", "minLength": 1 },
+    "protocol_version": { "const": "genetic-assembly-adapter-v1", "default": "genetic-assembly-adapter-v1" },
+    "command": { "type": "string", "minLength": 1 },
+    "args": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "working_directory": { "type": "string" },
+    "environment": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {}
+    },
+    "timeout_ms": { "type": "integer", "minimum": 1, "maximum": 86400000, "default": 300000 },
+    "retry_limit": { "type": "integer", "minimum": 0, "maximum": 10, "default": 1 }
+  }
+}

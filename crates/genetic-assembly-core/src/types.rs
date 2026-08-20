@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
 use thiserror::Error;
 
@@ -79,6 +80,22 @@ pub struct Evaluation {
     pub objectives: Vec<f64>,
     #[serde(default)]
     pub constraints: Vec<f64>,
+    /// Small, durable references and diagnostics associated with this
+    /// evaluation. Large payloads belong in the caller's artifact store.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<EvaluationEvidence>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct EvaluationEvidence {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_key: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub metadata: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -90,6 +107,8 @@ pub struct Individual {
     pub constraint_violation: f64,
     pub rank: usize,
     pub crowding_distance: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<EvaluationEvidence>,
 }
 
 impl Individual {
@@ -157,6 +176,68 @@ pub trait Evaluator: Sync {
     fn evaluate(&self, genes: &[f64]) -> Result<Evaluation, EvaluationError>;
 }
 
+/// A stable request identifier plus a candidate genome. Batch backends must
+/// return exactly one result for every request and preserve these identifiers.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct EvaluationRequest {
+    pub id: u64,
+    pub genes: Vec<f64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct EvaluatedCandidate {
+    pub id: u64,
+    /// The canonical genome after optional domain repair. Built-in evaluators
+    /// normally return the request genome unchanged.
+    pub genes: Vec<f64>,
+    pub evaluation: Evaluation,
+}
+
+/// Batch boundary used by external model runtimes. Implementations own their
+/// internal concurrency; the solver never nests a Rayon pool around this call.
+pub trait BatchEvaluator: Sync {
+    fn evaluate_batch(
+        &self,
+        candidates: &[EvaluationRequest],
+    ) -> Result<Vec<EvaluatedCandidate>, EvaluationError>;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SeedPopulationRequest {
+    pub size: usize,
+    pub seeds: Vec<u64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct OffspringRequest {
+    pub id: u64,
+    pub left_id: u64,
+    pub left_genes: Vec<f64>,
+    pub right_id: u64,
+    pub right_genes: Vec<f64>,
+    pub seed: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GeneratedCandidate {
+    pub id: u64,
+    pub genes: Vec<f64>,
+}
+
+/// Optional project-authored genome operations. NSGA-II selection, ranking,
+/// crowding, checkpointing, and run lifecycle remain in Rust.
+pub trait GenomeOperator: Sync {
+    fn seed_population(
+        &self,
+        request: &SeedPopulationRequest,
+    ) -> Result<Vec<Vec<f64>>, EvaluationError>;
+
+    fn make_offspring(
+        &self,
+        requests: &[OffspringRequest],
+    ) -> Result<Vec<GeneratedCandidate>, EvaluationError>;
+}
+
 impl<F> Evaluator for F
 where
     F: Fn(&[f64]) -> Result<Evaluation, EvaluationError> + Sync,
@@ -192,6 +273,10 @@ pub enum SolverError {
         #[source]
         source: EvaluationError,
     },
+    #[error("batch evaluation failed: {0}")]
+    BatchEvaluation(#[source] EvaluationError),
+    #[error("domain genome operation failed: {0}")]
+    GenomeOperation(#[source] EvaluationError),
     #[error("checkpoint is incompatible: {0}")]
     IncompatibleCheckpoint(String),
     #[error("failed to create evaluation thread pool: {0}")]

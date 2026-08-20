@@ -1,6 +1,6 @@
 {
   "name": "@genetic-assembly/visualizations",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Framework-agnostic optimization visualizations for Genetic Assembly",
   "type": "module",
   "main": "dist/index.js",

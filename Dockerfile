@@ -6,7 +6,7 @@ RUN cargo build --locked --release -p genetic-assembly-server
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates nodejs \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/genetic-assembly-server /usr/local/bin/genetic-assembly-server

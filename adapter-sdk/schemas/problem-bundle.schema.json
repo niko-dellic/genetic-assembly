@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genetic-assembly.dev/schemas/problem-bundle-v1.json",
+  "title": "Genetic Assembly Problem Bundle v1",
+  "type": "object",
+  "required": ["name", "problem"],
+  "properties": {
+    "schema_version": { "const": 1, "default": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "variable_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "problem": {
+      "type": "object",
+      "required": ["variables", "objectives"],
+      "properties": {
+        "variables": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/variable" } },
+        "objectives": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/objective" } }
+      },
+      "additionalProperties": false
+    },
+    "constraints": { "type": "array", "items": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string", "minLength": 1 }, "feasible_when": { "const": "lte_zero" } }, "additionalProperties": false } },
+    "artifacts": { "type": "array", "items": { "type": "object", "required": ["name", "content_hash", "artifact_key"], "properties": { "name": { "type": "string" }, "content_hash": { "type": "string" }, "artifact_key": { "type": "string" }, "media_type": { "type": "string" } }, "additionalProperties": false } },
+    "metadata": {}
+  },
+  "$defs": {
+    "variable": {
+      "oneOf": [
+        { "type": "object", "required": ["kind", "lower", "upper"], "properties": { "kind": { "const": "real" }, "lower": { "type": "number" }, "upper": { "type": "number" } }, "additionalProperties": false },
+        { "type": "object", "required": ["kind", "lower", "upper"], "properties": { "kind": { "const": "integer" }, "lower": { "type": "integer" }, "upper": { "type": "integer" }, "step": { "type": "integer", "minimum": 1 } }, "additionalProperties": false },
+        { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "binary" } }, "additionalProperties": false }
+      ]
+    },
+    "objective": { "type": "object", "required": ["name", "direction"], "properties": { "name": { "type": "string", "minLength": 1 }, "direction": { "enum": ["minimize", "maximize"] } }, "additionalProperties": false }
+  },
+  "additionalProperties": false
+}

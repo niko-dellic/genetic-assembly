@@ -7,6 +7,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+genetic-assembly-adapter = { path = "../genetic-assembly-adapter" }
 genetic-assembly-core = { path = "../genetic-assembly-core" }
 genetic-assembly-scene = { path = "../genetic-assembly-scene" }
 genetic-assembly-script = { path = "../genetic-assembly-script" }

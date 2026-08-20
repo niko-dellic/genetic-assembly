@@ -4,6 +4,7 @@ use crate::*;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use rayon::prelude::*;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,18 +19,13 @@ pub fn run_nsga2<E, O>(
     evaluator: &E,
     resume: Option<Checkpoint>,
     cancellation: &AtomicBool,
-    mut observer: O,
+    observer: O,
 ) -> Result<OptimizationResult, SolverError>
 where
     E: Evaluator,
     O: FnMut(&Checkpoint, &GenerationSummary) -> RunControl,
 {
     validate_problem_config(&problem, &config)?;
-    let directions: Vec<_> = problem
-        .objectives
-        .iter()
-        .map(|objective| objective.direction)
-        .collect();
     let thread_count = config.threads.unwrap_or(0);
     let mut builder = rayon::ThreadPoolBuilder::new();
     if thread_count > 0 {
@@ -39,17 +35,100 @@ where
         .build()
         .map_err(|error| SolverError::ThreadPool(error.to_string()))?;
 
+    run_nsga2_impl(
+        problem,
+        config,
+        |requests| evaluate_native_batch(&pool, evaluator, requests),
+        None,
+        resume,
+        cancellation,
+        observer,
+    )
+}
+
+/// Run NSGA-II against a backend that evaluates an entire indexed batch. The
+/// backend owns concurrency, which prevents oversubscription when it is a
+/// subprocess supervisor or remote model runtime.
+pub fn run_nsga2_batch<B, O>(
+    problem: ProblemSpec,
+    config: Nsga2Config,
+    evaluator: &B,
+    operators: Option<&dyn GenomeOperator>,
+    resume: Option<Checkpoint>,
+    cancellation: &AtomicBool,
+    observer: O,
+) -> Result<OptimizationResult, SolverError>
+where
+    B: BatchEvaluator + ?Sized,
+    O: FnMut(&Checkpoint, &GenerationSummary) -> RunControl,
+{
+    validate_problem_config(&problem, &config)?;
+    run_nsga2_impl(
+        problem,
+        config,
+        |requests| {
+            evaluator
+                .evaluate_batch(requests)
+                .map_err(SolverError::BatchEvaluation)
+        },
+        operators,
+        resume,
+        cancellation,
+        observer,
+    )
+}
+
+fn run_nsga2_impl<F, O>(
+    problem: ProblemSpec,
+    config: Nsga2Config,
+    evaluate: F,
+    operators: Option<&dyn GenomeOperator>,
+    resume: Option<Checkpoint>,
+    cancellation: &AtomicBool,
+    mut observer: O,
+) -> Result<OptimizationResult, SolverError>
+where
+    F: Fn(&[EvaluationRequest]) -> Result<Vec<EvaluatedCandidate>, SolverError>,
+    O: FnMut(&Checkpoint, &GenerationSummary) -> RunControl,
+{
+    let directions: Vec<_> = problem
+        .objectives
+        .iter()
+        .map(|objective| objective.direction)
+        .collect();
+
     let (mut generation, mut population, mut evaluations) = if let Some(checkpoint) = resume {
         validate_checkpoint(&problem, &config, &checkpoint)?;
         let evaluations = checkpoint.population.len() as u64
             + checkpoint.generation as u64 * config.population_size as u64;
         (checkpoint.generation, checkpoint.population, evaluations)
     } else {
-        let mut rng = generation_rng(config.seed, usize::MAX);
-        let genes: Vec<_> = (0..config.population_size)
-            .map(|_| random_genes(&problem.variables, &mut rng))
-            .collect();
-        let population = evaluate_batch(&pool, evaluator, &problem, genes, 0)?;
+        let genes = if let Some(operators) = operators {
+            let request = SeedPopulationRequest {
+                size: config.population_size,
+                seeds: (0..config.population_size)
+                    .map(|index| operation_seed(config.seed, usize::MAX, index))
+                    .collect(),
+            };
+            let genes = operators
+                .seed_population(&request)
+                .map_err(SolverError::GenomeOperation)?;
+            if genes.len() != config.population_size {
+                return Err(SolverError::GenomeOperation(EvaluationError::new(format!(
+                    "seed_population returned {} candidates, expected {}",
+                    genes.len(),
+                    config.population_size
+                ))));
+            }
+            genes
+        } else {
+            let mut rng = generation_rng(config.seed, usize::MAX);
+            (0..config.population_size)
+                .map(|_| random_genes(&problem.variables, &mut rng))
+                .collect()
+        };
+        validate_gene_batch(&problem, &genes).map_err(SolverError::GenomeOperation)?;
+        let population = evaluate_candidate_batch(&evaluate, &problem, genes, 0)?;
         (0, population, config.population_size as u64)
     };
 
@@ -65,15 +144,37 @@ where
             sbx_distribution_index: config.sbx_distribution_index,
             mutation_distribution_index: config.mutation_distribution_index,
         };
-        let genes: Vec<_> = (0..config.population_size)
-            .map(|_| {
-                let left = tournament(&population, &mut rng);
-                let right = tournament(&population, &mut rng);
-                make_child(left, right, &problem.variables, &variation, &mut rng)
-            })
-            .collect();
         let base_id = (generation as u64 + 1) * config.population_size as u64;
-        let offspring = evaluate_batch(&pool, evaluator, &problem, genes, base_id)?;
+        let genes = if let Some(operators) = operators {
+            let requests: Vec<_> = (0..config.population_size)
+                .map(|index| {
+                    let left = tournament(&population, &mut rng);
+                    let right = tournament(&population, &mut rng);
+                    OffspringRequest {
+                        id: base_id + index as u64,
+                        left_id: left.id,
+                        left_genes: left.genes.clone(),
+                        right_id: right.id,
+                        right_genes: right.genes.clone(),
+                        seed: operation_seed(config.seed, generation, index),
+                    }
+                })
+                .collect();
+            let generated = operators
+                .make_offspring(&requests)
+                .map_err(SolverError::GenomeOperation)?;
+            validate_generated_candidates(&requests, generated)?
+        } else {
+            (0..config.population_size)
+                .map(|_| {
+                    let left = tournament(&population, &mut rng);
+                    let right = tournament(&population, &mut rng);
+                    make_child(left, right, &problem.variables, &variation, &mut rng)
+                })
+                .collect()
+        };
+        validate_gene_batch(&problem, &genes).map_err(SolverError::GenomeOperation)?;
+        let offspring = evaluate_candidate_batch(&evaluate, &problem, genes, base_id)?;
         evaluations += offspring.len() as u64;
         population.extend(offspring);
         population = environmental_selection(population, config.population_size, &directions);
@@ -103,41 +204,113 @@ where
     })
 }
 
-fn evaluate_batch<E: Evaluator>(
+fn evaluate_native_batch<E: Evaluator>(
     pool: &rayon::ThreadPool,
     evaluator: &E,
-    problem: &ProblemSpec,
-    genes: Vec<Vec<f64>>,
-    base_id: u64,
-) -> Result<Vec<Individual>, SolverError> {
+    requests: &[EvaluationRequest],
+) -> Result<Vec<EvaluatedCandidate>, SolverError> {
     let results: Vec<_> = pool.install(|| {
-        genes
+        requests
             .par_iter()
             .enumerate()
-            .map(|(index, genes)| {
+            .map(|(index, request)| {
                 let evaluation = evaluator
-                    .evaluate(genes)
+                    .evaluate(&request.genes)
                     .map_err(|source| SolverError::Evaluation { index, source })?;
-                validate_evaluation(problem, &evaluation)
-                    .map_err(|source| SolverError::Evaluation { index, source })?;
-                let violation = evaluation
-                    .constraints
-                    .iter()
-                    .map(|value| value.max(0.0))
-                    .sum();
-                Ok(Individual {
-                    id: base_id + index as u64,
-                    genes: genes.clone(),
-                    objectives: evaluation.objectives,
-                    constraints: evaluation.constraints,
-                    constraint_violation: violation,
-                    rank: usize::MAX,
-                    crowding_distance: 0.0,
+                Ok(EvaluatedCandidate {
+                    id: request.id,
+                    genes: request.genes.clone(),
+                    evaluation,
                 })
             })
             .collect()
     });
     results.into_iter().collect()
+}
+
+fn evaluate_candidate_batch<F>(
+    evaluate: &F,
+    problem: &ProblemSpec,
+    genes: Vec<Vec<f64>>,
+    base_id: u64,
+) -> Result<Vec<Individual>, SolverError>
+where
+    F: Fn(&[EvaluationRequest]) -> Result<Vec<EvaluatedCandidate>, SolverError>,
+{
+    let requests: Vec<_> = genes
+        .into_iter()
+        .enumerate()
+        .map(|(index, genes)| EvaluationRequest {
+            id: base_id + index as u64,
+            genes,
+        })
+        .collect();
+    let evaluated = evaluate(&requests)?;
+    if evaluated.len() != requests.len() {
+        return Err(SolverError::BatchEvaluation(EvaluationError::new(format!(
+            "backend returned {} evaluations, expected {}",
+            evaluated.len(),
+            requests.len()
+        ))));
+    }
+    let expected_ids: HashSet<_> = requests.iter().map(|request| request.id).collect();
+    let returned_ids: HashSet<_> = evaluated.iter().map(|candidate| candidate.id).collect();
+    if returned_ids.len() != evaluated.len() || returned_ids != expected_ids {
+        return Err(SolverError::BatchEvaluation(EvaluationError::new(
+            "backend returned duplicate, missing, or unexpected candidate IDs",
+        )));
+    }
+    let mut by_id: std::collections::HashMap<_, _> = evaluated
+        .into_iter()
+        .map(|candidate| (candidate.id, candidate))
+        .collect();
+    requests
+        .into_iter()
+        .enumerate()
+        .map(|(index, request)| {
+            let candidate = by_id.remove(&request.id).expect("ID set was validated");
+            validate_gene_batch(problem, std::slice::from_ref(&candidate.genes))
+                .map_err(|source| SolverError::Evaluation { index, source })?;
+            validate_evaluation(problem, &candidate.evaluation)
+                .map_err(|source| SolverError::Evaluation { index, source })?;
+            let violation = candidate
+                .evaluation
+                .constraints
+                .iter()
+                .map(|value| value.max(0.0))
+                .sum();
+            Ok(Individual {
+                id: candidate.id,
+                genes: candidate.genes,
+                objectives: candidate.evaluation.objectives,
+                constraints: candidate.evaluation.constraints,
+                constraint_violation: violation,
+                rank: usize::MAX,
+                crowding_distance: 0.0,
+                evidence: candidate.evaluation.evidence,
+            })
+        })
+        .collect()
+}
+
+fn validate_generated_candidates(
+    requests: &[OffspringRequest],
+    generated: Vec<GeneratedCandidate>,
+) -> Result<Vec<Vec<f64>>, SolverError> {
+    if generated.len() != requests.len()
+        || generated
+            .iter()
+            .zip(requests)
+            .any(|(candidate, request)| candidate.id != request.id)
+    {
+        return Err(SolverError::GenomeOperation(EvaluationError::new(
+            "make_offspring must return one candidate per request in request order",
+        )));
+    }
+    Ok(generated
+        .into_iter()
+        .map(|candidate| candidate.genes)
+        .collect())
 }
 
 fn environmental_selection(
@@ -278,6 +451,54 @@ fn generation_rng(seed: u64, generation: usize) -> ChaCha20Rng {
             .wrapping_add(0x9e37_79b9_7f4a_7c15)
             .wrapping_mul(0xbf58_476d_1ce4_e5b9);
     ChaCha20Rng::seed_from_u64(mixed)
+}
+
+fn operation_seed(seed: u64, generation: usize, index: usize) -> u64 {
+    let generation = generation as u64;
+    let index = index as u64;
+    seed ^ generation
+        .wrapping_add(0x9e37_79b9_7f4a_7c15)
+        .wrapping_mul(0xbf58_476d_1ce4_e5b9)
+        ^ index
+            .wrapping_add(0x94d0_49bb_1331_11eb)
+            .wrapping_mul(0xd6e8_feb8_6659_fd93)
+}
+
+fn validate_gene_batch(problem: &ProblemSpec, batch: &[Vec<f64>]) -> Result<(), EvaluationError> {
+    for (candidate_index, genes) in batch.iter().enumerate() {
+        if genes.len() != problem.variables.len() {
+            return Err(EvaluationError::new(format!(
+                "candidate {candidate_index} has {} genes, expected {}",
+                genes.len(),
+                problem.variables.len()
+            )));
+        }
+        for (gene_index, (gene, variable)) in genes.iter().zip(&problem.variables).enumerate() {
+            if !gene.is_finite() {
+                return Err(EvaluationError::new(format!(
+                    "candidate {candidate_index} gene {gene_index} is not finite"
+                )));
+            }
+            let valid = match variable {
+                Variable::Real { lower, upper } => (*lower..=*upper).contains(gene),
+                Variable::Integer { lower, upper, step } => {
+                    let rounded = gene.round();
+                    (*gene - rounded).abs() <= f64::EPSILON
+                        && rounded >= *lower as f64
+                        && rounded <= *upper as f64
+                        && ((rounded as i128 - *lower as i128) % *step as i128 == 0
+                            || rounded == *upper as f64)
+                }
+                Variable::Binary => *gene == 0.0 || *gene == 1.0,
+            };
+            if !valid {
+                return Err(EvaluationError::new(format!(
+                    "candidate {candidate_index} gene {gene_index} violates its variable contract"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn validate_problem_config(
@@ -421,6 +642,7 @@ mod tests {
         Ok(Evaluation {
             objectives: vec![f1, g * (1.0 - (f1 / g).sqrt())],
             constraints: vec![],
+            evidence: None,
         })
     }
 
@@ -511,6 +733,7 @@ mod tests {
                 constraint_violation: 0.0,
                 rank: 0,
                 crowding_distance: 1.0,
+                evidence: None,
             },
             Individual {
                 id: 2,
@@ -520,6 +743,7 @@ mod tests {
                 constraint_violation: 2.0,
                 rank: 1,
                 crowding_distance: 0.0,
+                evidence: None,
             },
         ];
         let summary = summarize_generation(4, 10, &population);
@@ -533,5 +757,146 @@ mod tests {
         assert_eq!(summary.objective_stats[1].max, 9.0);
         assert_eq!(summary.constraint_stats[0].mean, 0.5);
         assert_eq!(summary.total_violation_stats.unwrap().mean, 1.0);
+    }
+
+    struct RepairingBackend;
+
+    impl BatchEvaluator for RepairingBackend {
+        fn evaluate_batch(
+            &self,
+            candidates: &[EvaluationRequest],
+        ) -> Result<Vec<EvaluatedCandidate>, EvaluationError> {
+            Ok(candidates
+                .iter()
+                .map(|candidate| EvaluatedCandidate {
+                    id: candidate.id,
+                    genes: candidate.genes.clone(),
+                    evaluation: Evaluation {
+                        objectives: vec![candidate.genes[0], 1.0 - candidate.genes[0]],
+                        constraints: vec![],
+                        evidence: Some(EvaluationEvidence {
+                            artifact_key: Some(format!("evidence/{}", candidate.id)),
+                            ..Default::default()
+                        }),
+                    },
+                })
+                .collect())
+        }
+    }
+
+    impl GenomeOperator for RepairingBackend {
+        fn seed_population(
+            &self,
+            request: &SeedPopulationRequest,
+        ) -> Result<Vec<Vec<f64>>, EvaluationError> {
+            Ok(request
+                .seeds
+                .iter()
+                .map(|seed| vec![(*seed % 101) as f64 / 100.0])
+                .collect())
+        }
+
+        fn make_offspring(
+            &self,
+            requests: &[OffspringRequest],
+        ) -> Result<Vec<GeneratedCandidate>, EvaluationError> {
+            Ok(requests
+                .iter()
+                .map(|request| GeneratedCandidate {
+                    id: request.id,
+                    genes: vec![(request.left_genes[0] + request.right_genes[0]) / 2.0],
+                })
+                .collect())
+        }
+    }
+
+    #[test]
+    fn batch_backend_can_own_genome_operations_and_evidence() {
+        let problem = ProblemSpec {
+            variables: vec![Variable::Real {
+                lower: 0.0,
+                upper: 1.0,
+            }],
+            objectives: vec![
+                Objective {
+                    name: "left".into(),
+                    direction: ObjectiveDirection::Minimize,
+                },
+                Objective {
+                    name: "right".into(),
+                    direction: ObjectiveDirection::Minimize,
+                },
+            ],
+        };
+        let config = Nsga2Config {
+            population_size: 8,
+            generations: 3,
+            seed: 17,
+            ..Default::default()
+        };
+        let cancel = AtomicBool::new(false);
+        let backend = RepairingBackend;
+        let result = run_nsga2_batch(
+            problem.clone(),
+            config.clone(),
+            &backend,
+            Some(&backend),
+            None,
+            &cancel,
+            |_, _| RunControl::Continue,
+        )
+        .unwrap();
+        assert_eq!(result.generations, 3);
+        assert!(
+            result
+                .final_population
+                .iter()
+                .all(|candidate| candidate.evidence.is_some())
+        );
+
+        let many = run_nsga2_batch(
+            problem.clone(),
+            Nsga2Config {
+                threads: Some(8),
+                ..config.clone()
+            },
+            &backend,
+            Some(&backend),
+            None,
+            &cancel,
+            |_, _| RunControl::Continue,
+        )
+        .unwrap();
+        assert_eq!(result.pareto_front, many.pareto_front);
+
+        let mut checkpoint = None;
+        run_nsga2_batch(
+            problem.clone(),
+            config.clone(),
+            &backend,
+            Some(&backend),
+            None,
+            &cancel,
+            |current, summary| {
+                if summary.generation == 1 {
+                    checkpoint = Some(current.clone());
+                    RunControl::Stop
+                } else {
+                    RunControl::Continue
+                }
+            },
+        )
+        .unwrap();
+        let resumed = run_nsga2_batch(
+            problem,
+            config,
+            &backend,
+            Some(&backend),
+            checkpoint,
+            &cancel,
+            |_, _| RunControl::Continue,
+        )
+        .unwrap();
+        assert_eq!(result.pareto_front, resumed.pareto_front);
     }
 }

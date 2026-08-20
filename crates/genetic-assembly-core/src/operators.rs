@@ -210,6 +210,7 @@ mod tests {
             constraint_violation: 0.0,
             rank: 0,
             crowding_distance: 0.0,
+            evidence: None,
         };
         let right = Individual {
             id: 2,

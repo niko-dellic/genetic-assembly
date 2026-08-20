@@ -149,6 +149,7 @@ mod tests {
             constraint_violation: violation,
             rank: usize::MAX,
             crowding_distance: 0.0,
+            evidence: None,
         }
     }
 

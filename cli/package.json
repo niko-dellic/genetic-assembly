@@ -1,0 +1,17 @@
+{
+  "name": "@genetic-assembly/cli",
+  "version": "0.2.0",
+  "description": "Scaffold and operate a local Genetic Assembly companion",
+  "type": "module",
+  "bin": { "ga": "dist/cli.js" },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}

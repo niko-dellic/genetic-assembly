@@ -721,6 +721,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "genetic-assembly-adapter"
+version = "0.2.0"
+dependencies = [
+ "genetic-assembly-core",
+ "libc",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "genetic-assembly-core"
 version = "0.2.0"
 dependencies = [
@@ -765,6 +776,7 @@ dependencies = [
  "bytes",
  "chrono",
  "futures",
+ "genetic-assembly-adapter",
  "genetic-assembly-core",
  "genetic-assembly-scene",
  "genetic-assembly-script",
