@@ -1,5 +1,4 @@
-[build]
-target = "wasm32-unknown-unknown"
-
-[target.wasm32-unknown-unknown]
-rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
+# Keep the workspace native by default. Browser clients talk to the native Rust
+# server; WASM builds, when reintroduced, must opt into their target explicitly.
+[alias]
+test-native = "test --workspace"

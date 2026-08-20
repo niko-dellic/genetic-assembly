@@ -1,21 +1,26 @@
 {
   "name": "genetic-assembly",
   "version": "1.0.0",
-  "description": "WebAssembly-based Multi-Objective Optimization",
+  "description": "Native Rust NSGA-II server and Three.js client",
   "type": "module",
   "scripts": {
-    "build:wasm": "wasm-pack build --target web --out-dir pkg --release",
-    "dev": "npm run build:wasm && cd demo && npm run dev",
-    "demo:install": "cd demo && npm install",
-    "demo:dev": "cd demo && npm run dev",
-    "demo:build": "npm run build:wasm && cd demo && npm run build",
-    "demo:preview": "cd demo && npm run preview"
+    "build": "cargo build --workspace && npm run client:build && npm run demo:build",
+    "test": "cargo test --workspace && npm run client:type-check && npm run demo:type-check",
+    "server": "cargo run -p genetic-assembly-server",
+    "client:install": "npm --prefix client install",
+    "client:build": "npm --prefix client run build",
+    "client:type-check": "npm --prefix client run type-check",
+    "demo:install": "npm --prefix demo install",
+    "demo:dev": "npm --prefix demo run dev",
+    "demo:build": "npm --prefix demo run build",
+    "demo:type-check": "npm --prefix demo run type-check",
+    "demo:preview": "npm --prefix demo run preview"
   },
   "keywords": [
-    "wasm",
+    "rust",
     "genetic-algorithm",
     "nsga2",
-    "nsga3",
+    "threejs",
     "multi-objective-optimization"
   ],
   "author": "nikodellic",

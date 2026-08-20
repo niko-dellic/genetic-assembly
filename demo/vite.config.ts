@@ -2,6 +2,9 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   root: ".",
+  resolve: {
+    dedupe: ["three"],
+  },
   build: {
     outDir: "./dist",
     emptyOutDir: true,
@@ -12,8 +15,5 @@ export default defineConfig({
     fs: {
       allow: [".."],
     },
-  },
-  optimizeDeps: {
-    exclude: ["genetic-assembly"],
   },
 });

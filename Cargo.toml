@@ -1,27 +1,48 @@
-[package]
-name = "genetic-assembly"
-version = "0.1.0"
-edition = "2021"
-description = "WebAssembly-based multi-objective optimization solver using NSGA-II algorithm with support for parallel execution"
-repository = "https://github.com/nikodellic/genetic-assembly"
+[workspace]
+members = [
+  "crates/genetic-assembly-core",
+  "crates/genetic-assembly-scene",
+  "crates/genetic-assembly-script",
+  "crates/genetic-assembly-server",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
 license = "MIT"
+repository = "https://github.com/nikodellic/genetic-assembly"
+rust-version = "1.89"
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[dependencies]
-wasm-bindgen = "0.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde-wasm-bindgen = "0.6"
-js-sys = "0.3"
-getrandom = { version = "0.2", features = ["js"] }
-rand = { version = "0.8", features = ["small_rng"] }
-rand_distr = "0.4"
-
-[package.metadata.wasm-pack.profile.release]
-wasm-opt = false
+[workspace.dependencies]
+async-trait = "0.1"
+axum = { version = "0.8.9", features = ["json", "multipart", "macros"] }
+bytes = "1.10"
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+glam = { version = "0.30", features = ["serde"] }
+gltf = { version = "1.4.1", features = ["import", "names", "extras"] }
+hex = "0.4"
+object_store = { version = "0.14.1", features = ["aws"] }
+rand = "0.9"
+rand_chacha = { version = "0.9", features = ["serde"] }
+rayon = "1.12"
+rmp-serde = "1.3"
+rquickjs = { version = "0.12.2", features = ["parallel", "loader", "macro"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "migrate", "macros"] }
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+zstd = "0.13"
 
 [profile.release]
 opt-level = 3
-lto = true
+lto = "thin"
+codegen-units = 1
