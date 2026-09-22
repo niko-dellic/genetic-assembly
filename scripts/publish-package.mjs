@@ -1,0 +1,12 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+const folder=process.argv[2];
+if(!['headless-client','adapter-sdk','cli','client','visualizations'].includes(folder)) throw Error('Unknown package');
+const manifest=JSON.parse(readFileSync(`${folder}/package.json`));
+if(process.env.GITHUB_REF !== `refs/tags/v${manifest.version}`) throw Error('Release tag must match package version');
+const artifact=JSON.parse(readFileSync('artifacts/manifest.json')).find(a=>a.name===manifest.name && a.version===manifest.version);
+if(!artifact) throw Error('Missing verified artifact');
+const integrity = 'sha512-' + createHash('sha512').update(readFileSync(`artifacts/${artifact.filename}`)).digest('base64');
+if (integrity !== artifact.integrity) throw Error('Artifact integrity mismatch');
+execFileSync('npm',['publish',`artifacts/${artifact.filename}`,'--access','public','--provenance'],{stdio:'inherit'});

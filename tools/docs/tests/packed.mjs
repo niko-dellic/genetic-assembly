@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync, cpSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+const directory = mkdtempSync(join(tmpdir(), 'ga-consumer-'));
+const run = (command, args) => execFileSync(command, args, { cwd: directory, stdio: 'inherit' });
+try {
+  const artifacts = JSON.parse(readFileSync(resolve(root, 'artifacts/manifest.json')));
+  writeFileSync(join(directory, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+  const paths = artifacts.filter(a => !['@genetic-assembly/three','@genetic-assembly/visualizations'].includes(a.name)).map(a => resolve(root, 'artifacts', a.filename));
+  run('npm', ['install', '--no-audit', '--no-fund', ...paths]);
+  assert(!existsSync(join(directory, 'node_modules/three')), 'Headless installation pulled in Three.js');
+  run('node', ['--input-type=module', '-e', `import {CompanionClient} from '@genetic-assembly/client'; import {defineAdapter,runConformanceSuite} from '@genetic-assembly/adapter-sdk'; if(!CompanionClient || !defineAdapter || !runConformanceSuite) throw Error('Missing exports');`]);
+  for (const file of ['problem-bundle','adapter-launch','adapter-protocol']) JSON.parse(readFileSync(join(directory, `node_modules/@genetic-assembly/adapter-sdk/schemas/${file}.schema.json`)));
+  run('npx', ['--no-install', 'ga', 'init']);
+  const before = readFileSync(join(directory, '.genetic-assembly/adapter.mjs'), 'utf8');
+  run('npx', ['--no-install', 'ga', 'init']);
+  assert.equal(readFileSync(join(directory, '.genetic-assembly/adapter.mjs'), 'utf8'), before);
+  run('npx', ['--no-install', 'ga', 'test-adapter']);
+  run('npm', ['install', '--no-audit', '--no-fund', ...artifacts.filter(a => !paths.includes(resolve(root,'artifacts',a.filename))).map(a => resolve(root,'artifacts',a.filename)), 'three@0.180.0', '@types/three@0.180.0', 'typescript@5.9.3', '@types/node@24', 'esbuild']);
+  for (const file of ['quickstart.ts','three.ts','visualizations.ts','adapter.mjs']) cpSync(resolve(root,'tools/docs/snippets',file),join(directory,file));
+  writeFileSync(join(directory,'tsconfig.json'),JSON.stringify({compilerOptions:{target:'ES2022',module:'NodeNext',moduleResolution:'NodeNext',strict:true,noEmit:true,skipLibCheck:true,lib:['ES2022','DOM','DOM.Iterable']},include:['*.ts']}));
+  run('npx',['--no-install','tsc']);
+  run('npx',['--no-install','esbuild','three.ts','visualizations.ts','--bundle','--platform=browser','--format=esm','--outdir=build']);
+  run('npx',['--no-install','esbuild','adapter.mjs','--bundle','--platform=node','--format=esm','--outfile=build/adapter.mjs']);
+  console.log('Independent tarball consumer passed: headless imports, schemas, CLI, types, browser bundles, adapter bundle.');
+} finally { rmSync(directory,{recursive:true,force:true}); }

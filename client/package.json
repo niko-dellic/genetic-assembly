@@ -1,20 +1,37 @@
 {
   "name": "@genetic-assembly/three",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Three.js integration for the Genetic Assembly companion",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "type-check": "tsc -p tsconfig.json --noEmit"
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "prepack": "node ../scripts/prepare-package.mjs client"
   },
-  "peerDependencies": { "three": ">=0.170.0" },
+  "peerDependencies": {
+    "three": ">=0.170.0"
+  },
   "devDependencies": {
     "@types/three": "^0.180.0",
     "three": "^0.180.0",
     "typescript": "^5.9.3"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niko-dellic/genetic-assembly.git",
+    "directory": "client"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://genetic-assembly-docs.vercel.app/"
 }

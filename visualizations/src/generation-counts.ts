@@ -2,6 +2,7 @@ import * as d3 from "d3";
 import { dimensions, emptyMessage, replaceSvg } from "./svg.js";
 import type { VisualizationController, VisualizationFrame } from "./types.js";
 
+/** Renders population, Pareto, and feasibility counts across generations. Returns a controller with update, resize, and destroy lifecycle methods. */
 export function createGenerationCounts(container: HTMLElement): VisualizationController {
   let frame: VisualizationFrame | undefined;
 

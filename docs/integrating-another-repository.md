@@ -28,13 +28,13 @@ The rest of this guide focuses on the generic adapter path.
 
 ## 1. Install and scaffold
 
-Once the packages and companion image have been published:
+Install the client, adapter SDK, and CLI tarballs using the [installation guide](./installation.md), then scaffold your project:
 
 ```bash
-npm install @genetic-assembly/client
-npm install --save-dev @genetic-assembly/adapter-sdk @genetic-assembly/cli typescript
 npx ga init
 ```
+
+Build the local companion image and set `GA_IMAGE=genetic-assembly:0.2.1` as described in that guide. Registry publication is deferred.
 
 `ga init` creates these non-overwriting starter files:
 
@@ -247,7 +247,7 @@ console.log("Adapter conforms.");
 
 The suite verifies initialization, capability consistency, ordered IDs, finite dimensions, repeatability, and optional materialization. Add project tests for repair invariants, cancellation, model failures, and known benchmark candidates.
 
-The complete domain-operator example is in [`examples/reference-adapter`](../examples/reference-adapter).
+The complete domain-operator example is in [reference adapter](https://github.com/niko-dellic/genetic-assembly/tree/main/examples/reference-adapter).
 
 ## 6. Register the adapter launch
 

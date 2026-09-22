@@ -1,5 +1,6 @@
 import type { OptimizationDataset, VizCandidate, VizLever } from "./types.js";
 
+/** Computes direction-aware objective percentiles for comparing candidate fitness. */
 export function directionalPercentiles(
   candidates: VizCandidate[],
   objectiveIndex: number,
@@ -29,6 +30,7 @@ export function directionalPercentiles(
   return ranks;
 }
 
+/** Maps a gene to its normalized lever position using the declared variable bounds. */
 export function normalizedLeverValue(value: number, lever: VizLever): number {
   if (lever.kind === "binary") return value >= 0.5 ? 1 : 0;
   const lower = lever.lower ?? 0;
@@ -37,10 +39,12 @@ export function normalizedLeverValue(value: number, lever: VizLever): number {
   return Math.min(1, Math.max(0, (value - lower) / (upper - lower)));
 }
 
+/** Returns whether a constraint value meets the less-than-or-equal-to-zero convention. */
 export function isConstraintFeasible(value: number): boolean {
   return Number.isFinite(value) && value <= 0;
 }
 
+/** Returns dataset candidates matching the requested candidate IDs. */
 export function selectedCandidates(dataset: OptimizationDataset, ids: Array<number | undefined>): VizCandidate[] {
   const wanted = new Set(ids.filter((id): id is number => id !== undefined));
   return dataset.candidates.filter((candidate) => wanted.has(candidate.individual.id));

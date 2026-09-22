@@ -1,15 +1,18 @@
 {
   "name": "@genetic-assembly/visualizations",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Framework-agnostic optimization visualizations for Genetic Assembly",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepack": "node ../scripts/prepare-package.mjs visualizations"
   },
   "dependencies": {
     "d3": "^7.9.0"
@@ -24,5 +27,20 @@
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niko-dellic/genetic-assembly.git",
+    "directory": "visualizations"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://genetic-assembly-docs.vercel.app/",
+  "overrides": {
+    "rollup": "4.62.2"
+  }
 }

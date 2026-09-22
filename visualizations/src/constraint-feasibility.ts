@@ -3,6 +3,7 @@ import { isConstraintFeasible, selectedCandidates } from "./normalization.js";
 import { CHART_COLORS, dimensions, emptyMessage, replaceSvg } from "./svg.js";
 import type { VisualizationController, VisualizationFrame } from "./types.js";
 
+/** Renders candidate constraint feasibility. Returns a controller with update, resize, and destroy lifecycle methods. */
 export function createConstraintFeasibility(container: HTMLElement): VisualizationController {
   let frame: VisualizationFrame | undefined;
   function render(): void {

@@ -8,6 +8,7 @@ interface Dimension {
   value(candidate: VizCandidate): number;
 }
 
+/** Renders linked objective profiles as parallel coordinates. Returns a controller with update, resize, and destroy lifecycle methods. */
 export function createParallelCoordinates(
   container: HTMLElement,
   callbacks: VisualizationCallbacks = {},

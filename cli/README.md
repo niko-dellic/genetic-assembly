@@ -3,7 +3,7 @@
 Scaffold and operate a Genetic Assembly companion from another repository.
 
 ```bash
-npm install --save-dev @genetic-assembly/cli
+npm install /path/to/genetic-assembly/artifacts/genetic-assembly-cli-0.2.1.tgz
 npx ga init
 npx ga test-adapter
 npx ga up
@@ -18,3 +18,5 @@ Commands:
 - `ga down` stops the local stack without deleting named volumes.
 
 See [Integrating Genetic Assembly into another repository](https://github.com/niko-dellic/genetic-assembly/blob/main/docs/integrating-another-repository.md).
+
+Registry publication is deferred. Build local tarballs with `npm run pack` from the source checkout. See the [installation guide](https://genetic-assembly-docs.vercel.app/installation.html).

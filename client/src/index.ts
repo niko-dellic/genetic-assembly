@@ -6,6 +6,7 @@ import type {
 } from "./types.js";
 export * from "./types.js";
 
+/** A non-success HTTP response, preserving its status and parsed response body. */
 export class GeneticAssemblyApiError extends Error {
   constructor(
     message: string,
@@ -17,6 +18,7 @@ export class GeneticAssemblyApiError extends Error {
   }
 }
 
+/** Exports the supported scene as binary GLB with a versioned manifest. Stable userData.gaId values identify referenced objects. */
 export async function exportScene(scene: Scene, manifest: SceneManifest): Promise<{ glb: Blob; manifest: SceneManifest }> {
   const ids = new Map<string, Object3D>();
   scene.traverse((object) => {
@@ -49,9 +51,11 @@ export async function exportScene(scene: Scene, manifest: SceneManifest): Promis
   return { glb: new Blob([output], { type: "model/gltf-binary" }), manifest: { ...manifest, schema_version: 1 } };
 }
 
+/** Browser client for scene/evaluator optimization through the companion. Accepts a base URL and optional bearer token. */
 export class GeneticAssemblyClient {
   constructor(public readonly baseUrl = "http://127.0.0.1:3001", private readonly token?: string) {}
 
+  /** Uploads a binary GLB and its scene manifest, returning an immutable revision. */
   async uploadScene(glb: Blob, manifest: SceneManifest): Promise<Revision> {
     const body = new FormData();
     body.append("glb", glb, "scene.glb");
@@ -59,19 +63,26 @@ export class GeneticAssemblyClient {
     return this.request("/v1/scenes", { method: "POST", body });
   }
 
+  /** Registers trusted JavaScript evaluator source, objective metadata, and optional runtime limits. */
   createEvaluator(source: string, manifest: EvaluatorManifest, limits?: ScriptLimits): Promise<Revision> {
     return this.request("/v1/evaluators", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ source, manifest, limits }) });
   }
 
+  /** Queues optimization against the supplied immutable revision pair and returns the initial run status. */
   startRun(sceneRevisionId: string, evaluatorRevisionId: string, config: Nsga2Config = {}): Promise<RunStatus> {
     return this.request("/v1/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scene_revision_id: sceneRevisionId, evaluator_revision_id: evaluatorRevisionId, config }) });
   }
 
+  /** Reads current run status, progress, configuration, and failure details. */
   getRun(id: string): Promise<RunStatus> { return this.request(`/v1/runs/${id}`); }
+  /** Retrieves retained Pareto candidates and their patches or project materializations. */
   getResults(id: string): Promise<RunResults> { return this.request(`/v1/runs/${id}/results`); }
+  /** Retrieves candidate metadata and available generation statistics for visualization. */
   getAnalytics(id: string): Promise<RunAnalytics> { return this.request(`/v1/runs/${id}/analytics`); }
+  /** Requests cooperative run cancellation. Use getRun to observe the terminal state. */
   cancel(id: string): Promise<RunStatus> { return this.request(`/v1/runs/${id}/cancel`, { method: "POST" }); }
 
+  /** Streams run events until completion, failure, cancellation, or signal abort. Reconnects using the last event ID. Aborting observation does not cancel the run. */
   async subscribe(id: string, onEvent: (event: RunEvent) => void, signal?: AbortSignal): Promise<void> {
     let lastEventId: string | undefined;
     const seenEventIds = new Set<string>();
@@ -82,26 +93,31 @@ export class GeneticAssemblyClient {
       if (!response.ok || !response.body) throw new Error(await response.text() || `SSE failed: ${response.status}`);
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
       let buffer = "";
-      while (!signal?.aborted) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += value;
-        let boundary: number;
-        while ((boundary = buffer.indexOf("\n\n")) >= 0) {
-          const frame = buffer.slice(0, boundary); buffer = buffer.slice(boundary + 2);
-          const lines = frame.split("\n");
-          const eventId = lines.find((line) => line.startsWith("id:"))?.slice(3).trimStart();
-          const data = lines.filter((line) => line.startsWith("data:"))
-            .map((line) => line.slice(5).trimStart()).join("\n");
-          if (data && (!eventId || !seenEventIds.has(eventId))) {
-            const event = JSON.parse(data) as RunEvent;
-            onEvent(event);
-            if (event.type === "completed" || event.type === "failed"
-              || (event.type === "status" && ["completed", "failed", "cancelled"].includes(event.status))) return;
+      try {
+        while (!signal?.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          let boundary: number;
+          while ((boundary = buffer.indexOf("\n\n")) >= 0) {
+            const frame = buffer.slice(0, boundary); buffer = buffer.slice(boundary + 2);
+            const lines = frame.split("\n");
+            const eventId = lines.find((line) => line.startsWith("id:"))?.slice(3).trimStart();
+            const data = lines.filter((line) => line.startsWith("data:"))
+              .map((line) => line.slice(5).trimStart()).join("\n");
+            if (data && (!eventId || !seenEventIds.has(eventId))) {
+              const event = JSON.parse(data) as RunEvent;
+              onEvent(event);
+              if (event.type === "completed" || event.type === "failed"
+                || (event.type === "status" && ["completed", "failed", "cancelled"].includes(event.status))) return;
+            }
+            if (eventId) seenEventIds.add(eventId);
+            if (eventId) lastEventId = eventId;
           }
-          if (eventId) seenEventIds.add(eventId);
-          if (eventId) lastEventId = eventId;
         }
+      } finally {
+        await reader.cancel().catch(() => {});
+        reader.releaseLock();
       }
       await abortableDelay(750, signal);
     }
@@ -141,10 +157,13 @@ function abortableDelay(milliseconds: number, signal?: AbortSignal): Promise<voi
   });
 }
 
+/** Applies candidate patches to a Three.js scene and retains original values for revert(). */
 export class CandidatePreview {
   private readonly original = new Map<string, unknown>();
   constructor(private readonly scene: Scene) {}
+  /** Applies a retained candidate to the scene. The first original value of each changed property is preserved. */
   apply(member: ResultMember): void { for (const patch of member.patches) this.applyPatch(patch); }
+  /** Restores properties changed by previews and clears the saved originals. */
   revert(): void {
     for (const [key, value] of this.original) this.write(key, value);
     this.original.clear();

@@ -1,5 +1,6 @@
 import type { OptimizationDataset } from "./types.js";
 
+/** Validates a visualization dataset and throws when its schema or candidate data is inconsistent. */
 export function validateDataset(dataset: OptimizationDataset): void {
   const objectiveCount = dataset.objectives.length;
   const leverCount = dataset.levers.length;

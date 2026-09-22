@@ -3,6 +3,7 @@ import { directionalPercentiles, selectedCandidates } from "./normalization.js";
 import { CHART_COLORS, dimensions, emptyMessage, replaceSvg } from "./svg.js";
 import type { VisualizationController, VisualizationFrame } from "./types.js";
 
+/** Renders direction-aware relative objective fitness profiles. Returns a controller with update, resize, and destroy lifecycle methods. */
 export function createDiamondFitness(container: HTMLElement): VisualizationController {
   let frame: VisualizationFrame | undefined;
 

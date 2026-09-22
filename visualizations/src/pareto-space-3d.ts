@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { chartColor, emptyMessage } from "./svg.js";
 import type { VisualizationCallbacks, VisualizationController, VisualizationFrame } from "./types.js";
 
+/** Renders a three-objective Pareto view with Three.js. Returns a controller with update, resize, and destroy lifecycle methods. */
 export function createParetoSpace3d(
   container: HTMLElement,
   callbacks: VisualizationCallbacks = {},

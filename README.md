@@ -4,6 +4,12 @@ Genetic Assembly is a native Rust NSGA-II local companion for project-authored o
 
 NSGA-III and browser-hosted solving are intentionally not part of v1. The implementation concentrates on making one canonical NSGA-II path deterministic, resumable, and suitable for local or server deployment.
 
+## Install in another repository
+
+Build versioned local tarballs with `npm run pack` after installing the package dependencies. See [installation](docs/installation.md) for consumer commands and the local companion image. npm publication is currently deferred.
+
+The [documentation website](https://genetic-assembly-docs.vercel.app/) includes [a first optimization](docs/quickstart.md), integration guides, recorded interactive examples, and generated public API references. Run `npm run docs:install` and `npm run docs:dev` to browse locally; `npm run docs:test` verifies the static site.
+
 ## Architecture
 
 ```mermaid
@@ -75,9 +81,9 @@ npm run down       # stop Postgres and the companion
 A project does not need a Rust toolchain. Scaffold its trusted local adapter with the CLI:
 
 ```bash
-npx @genetic-assembly/cli init
-npx @genetic-assembly/cli test-adapter
-npx @genetic-assembly/cli up
+npx ga init
+npx ga test-adapter
+GA_IMAGE=genetic-assembly:0.2.1 npx ga up
 ```
 
 The scaffold creates `.genetic-assembly/problem.json`, `adapter.json`, an NDJSON adapter, and a Compose definition. The project registers immutable problem and adapter revisions, starts a run through `@genetic-assembly/client`, subscribes to SSE progress, and interprets the adapter's final materializations. The declared `adapter_version` must exactly match the version reported during initialization, preventing a checkpoint from resuming against changed project code.
@@ -122,9 +128,9 @@ const manifest = {
   }],
 };
 
-const api = new GeneticAssemblyClient({ baseUrl: "http://127.0.0.1:3001" });
-const glb = await exportScene(scene, manifest);
-const sceneRevision = await api.uploadScene(glb, manifest);
+const api = new GeneticAssemblyClient("http://127.0.0.1:3001");
+const exported = await exportScene(scene, manifest);
+const sceneRevision = await api.uploadScene(exported.glb, exported.manifest);
 ```
 
 Uploaded evaluator modules expose exactly one `evaluate` function:

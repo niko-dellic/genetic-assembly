@@ -2,6 +2,7 @@ import * as d3 from "d3";
 import { chartColor, dimensions, emptyMessage, replaceSvg } from "./svg.js";
 import type { VisualizationCallbacks, VisualizationController, VisualizationFrame } from "./types.js";
 
+/** Renders a two-objective Pareto scatter plot with optional selection callbacks. Returns a controller with update, resize, and destroy lifecycle methods. */
 export function createParetoScatter(
   container: HTMLElement,
   callbacks: VisualizationCallbacks = {},

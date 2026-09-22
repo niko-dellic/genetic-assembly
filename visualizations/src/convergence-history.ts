@@ -2,6 +2,7 @@ import * as d3 from "d3";
 import { CHART_COLORS, dimensions, emptyMessage, replaceSvg } from "./svg.js";
 import type { VisualizationController, VisualizationFrame, VizGeneration } from "./types.js";
 
+/** Renders objective means and spread across complete generation history. Returns a controller with update, resize, and destroy lifecycle methods. */
 export function createConvergenceHistory(container: HTMLElement): VisualizationController {
   let frame: VisualizationFrame | undefined;
   function render(): void {

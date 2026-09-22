@@ -1,0 +1,177 @@
+:root {
+  /* Syntax colors describe code roles independently of the selected accent palette. */
+  --code-foreground: var(--ink);
+  --code-background: var(--surface-deep);
+  --code-token-keyword: #c4b5fd;
+  --code-token-string: #86efac;
+  --code-token-constant: #93c5fd;
+  --code-token-function: #fcd34d;
+  --code-token-parameter: #fdba74;
+  --code-token-comment: #a1a1aa;
+  --code-token-punctuation: #cbd5e1;
+  --code-token-string-expression: var(--code-token-string);
+  --code-token-link: var(--code-token-constant);
+  /* Static graph geometry stays neutral; moving agents use the active accent. */
+  --graph-structure: var(--muted);
+  --graph-agent-transit: var(--ink);
+  --abm-report-surface: var(--panel-raised);
+  --abm-report-subtle: var(--panel);
+  --abm-report-border: var(--line);
+  --abm-report-foreground: var(--ink);
+  --abm-report-muted: var(--muted);
+  --abm-series-1: var(--graph-agent-walk);
+  --abm-series-2: var(--graph-agent-bike);
+  --abm-series-3: var(--graph-agent-road);
+  --abm-series-4: var(--cluster-3);
+  --abm-series-5: var(--error);
+  color: var(--ink);
+  color-scheme: dark;
+  background: var(--page);
+  --ink: #e9eee8;
+  --muted: #8d9990;
+  --panel: #111614;
+  --panel-raised: #151c18;
+  --line: #273129;
+  --line-strong: #3b493e;
+  --acid: #c7f36b;
+  --acid-soft: #8cac52;
+  --error: #ff8070;
+  --warning: #ef9a66;
+  --warning-foreground: var(--warning);
+  --warning-surface: rgba(239, 154, 102, 0.08);
+  --page: #090c0b;
+  --surface-deep: #0b0f0d;
+  --surface-control: #101512;
+  --surface-hover: #151c18;
+  --control-background: #0b0f0d;
+  --control-foreground: var(--ink);
+  --on-accent: #0b0f0d;
+  --graph-background: #0b0f0d;
+  --graph-flow-normal: var(--acid);
+  --graph-agent-walk: var(--acid);
+  --graph-agent-bike: #91b9ff;
+  --graph-agent-road: #ff8a4c;
+  --graph-utilization-normal: var(--acid);
+  --graph-utilization-over: var(--error);
+  --chart-ink: #dfe7dc;
+  --chart-grid: #28352c;
+  --accent-wash: rgba(199, 243, 107, 0.08);
+  --danger-wash: rgba(255, 128, 112, 0.08);
+  --shadow-color: rgba(0, 0, 0, 0.42);
+  --cluster-3: #c987ff;
+  --abm-control-surface: var(--surface-control);
+  --abm-control-foreground: var(--control-foreground);
+  --abm-control-border: var(--line-strong);
+  --abm-chart-foreground: var(--chart-ink);
+  --abm-chart-grid: var(--chart-grid);
+}
+
+:root[data-theme='light'] {
+  --code-token-keyword: #6d28d9;
+  --code-token-string: #166534;
+  --code-token-constant: #1d4ed8;
+  --code-token-function: #854d0e;
+  --code-token-parameter: #9a3412;
+  --code-token-comment: #57636d;
+  --code-token-punctuation: #475569;
+  color: var(--ink);
+  color-scheme: light;
+  background: var(--page);
+  --ink: #27312c;
+  --muted: #68756e;
+  --panel: #f8faf7;
+  --panel-raised: #ffffff;
+  --line: #d9dfdb;
+  --line-strong: #bcc7c0;
+  --acid: #087f73;
+  --acid-soft: #4c9c93;
+  --error: #c74638;
+  --warning: #a84d1d;
+  --warning-foreground: var(--warning);
+  --warning-surface: rgba(168, 77, 29, 0.08);
+  --page: #f4f6f3;
+  --surface-deep: #edf1ee;
+  --surface-control: #f7f9f6;
+  --surface-hover: #ffffff;
+  --control-background: #ffffff;
+  --control-foreground: var(--ink);
+  --on-accent: #ffffff;
+  --graph-background: #eef2ef;
+  --graph-flow-normal: var(--acid);
+  --graph-agent-walk: var(--acid);
+  --graph-agent-bike: #315f9b;
+  --graph-agent-road: #b75825;
+  --graph-utilization-normal: var(--acid);
+  --graph-utilization-over: var(--error);
+  --chart-ink: #354139;
+  --chart-grid: #d3dbd6;
+  --accent-wash: rgba(8, 127, 115, 0.075);
+  --danger-wash: rgba(199, 70, 56, 0.08);
+  --shadow-color: rgba(35, 55, 44, 0.2);
+  --cluster-3: #7f3db8;
+}
+
+/* Palette and appearance are independent. Neutral is the default; green
+   selects the original palette. All UI consumers inherit these tokens; no component owns a palette. */
+:root:where(:not([data-palette='green'])) {
+  --ink: #fafafa;
+  --muted: #a1a1aa;
+  --page: #09090b;
+  --panel: #111113;
+  --panel-raised: #18181b;
+  --surface-deep: #101012;
+  --surface-control: #18181b;
+  --surface-hover: #27272a;
+  --control-background: #18181b;
+  --graph-background: #101012;
+  --line: #27272a;
+  --line-strong: #52525b;
+  --acid: #fafafa;
+  --acid-soft: #d4d4d8;
+  --on-accent: #18181b;
+  --accent-wash: rgba(250, 250, 250, 0.08);
+  --chart-ink: var(--ink);
+  --chart-grid: var(--line);
+}
+:root[data-theme='light']:where(:not([data-palette='green'])) {
+  --ink: #18181b;
+  --muted: #62626d;
+  --page: #ffffff;
+  --panel: #fafafa;
+  --panel-raised: #ffffff;
+  --surface-deep: #f4f4f5;
+  --surface-control: #fafafa;
+  --surface-hover: #f4f4f5;
+  --control-background: #ffffff;
+  --graph-background: #fafafa;
+  --line: #e4e4e7;
+  --line-strong: #a1a1aa;
+  --acid: #18181b;
+  --acid-soft: #3f3f46;
+  --on-accent: #ffffff;
+  --accent-wash: rgba(24, 24, 27, 0.06);
+}
+:root[data-palette='blue'] {
+  --acid: #93c5fd;
+  --acid-soft: #60a5fa;
+  --on-accent: #172554;
+  --accent-wash: rgba(147, 197, 253, 0.1);
+}
+:root[data-theme='light'][data-palette='blue'] {
+  --acid: #1d4ed8;
+  --acid-soft: #1e40af;
+  --on-accent: #ffffff;
+  --accent-wash: rgba(29, 78, 216, 0.07);
+}
+:root[data-palette='violet'] {
+  --acid: #c4b5fd;
+  --acid-soft: #a78bfa;
+  --on-accent: #2e1065;
+  --accent-wash: rgba(196, 181, 253, 0.1);
+}
+:root[data-theme='light'][data-palette='violet'] {
+  --acid: #6d28d9;
+  --acid-soft: #5b21b6;
+  --on-accent: #ffffff;
+  --accent-wash: rgba(109, 40, 217, 0.07);
+}

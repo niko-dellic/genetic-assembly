@@ -12,6 +12,7 @@ import type {
 
 export * from "./types.js";
 
+/** A non-success HTTP response, preserving its status and parsed response body. */
 export class GeneticAssemblyApiError extends Error {
   public constructor(
     message: string,
@@ -23,12 +24,14 @@ export class GeneticAssemblyApiError extends Error {
   }
 }
 
+/** HTTP and event-stream client for generic problem/adapter optimization runs. The companion must be running. */
 export class CompanionClient {
   public constructor(
     public readonly baseUrl = "http://127.0.0.1:3001",
     private readonly token?: string,
   ) {}
 
+  /** Uploads immutable bytes and returns a content-addressed artifact reference. */
   public uploadArtifact(data: BodyInit, mediaType = "application/octet-stream"): Promise<ArtifactResponse> {
     return this.request("/v1/artifacts", {
       method: "POST",
@@ -37,14 +40,17 @@ export class CompanionClient {
     });
   }
 
+  /** Validates and registers an immutable problem bundle. Reuse the returned revision ID when starting runs. */
   public createProblem(bundle: ProblemBundle): Promise<Revision> {
     return this.request("/v1/problems", this.jsonBody({ bundle }));
   }
 
+  /** Registers the trusted adapter launch configuration. Its version must match the adapter initialization response. */
   public createAdapter(launch: AdapterLaunch): Promise<Revision> {
     return this.request("/v1/adapters", this.jsonBody({ launch }));
   }
 
+  /** Queues optimization against the supplied immutable revision pair and returns the initial run status. */
   public startRun(
     problemRevisionId: string,
     adapterRevisionId: string,
@@ -57,11 +63,16 @@ export class CompanionClient {
     }));
   }
 
+  /** Reads current run status, progress, configuration, and failure details. */
   public getRun(id: string): Promise<RunStatus> { return this.request(`/v1/runs/${id}`); }
+  /** Retrieves retained Pareto candidates and their patches or project materializations. */
   public getResults(id: string): Promise<RunResults> { return this.request(`/v1/runs/${id}/results`); }
+  /** Retrieves candidate metadata and available generation statistics for visualization. */
   public getAnalytics(id: string): Promise<RunAnalytics> { return this.request(`/v1/runs/${id}/analytics`); }
+  /** Requests cooperative run cancellation. Use getRun to observe the terminal state. */
   public cancel(id: string): Promise<RunStatus> { return this.request(`/v1/runs/${id}/cancel`, { method: "POST" }); }
 
+  /** Streams run events until completion, failure, cancellation, or signal abort. Reconnects using the last event ID. Aborting observation does not cancel the run. */
   public async subscribe(
     id: string,
     onEvent: (event: RunEvent) => void,
@@ -77,34 +88,39 @@ export class CompanionClient {
         throw new Error((await response.text()) || `SSE failed: ${response.status}`);
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
       let buffer = "";
-      while (!signal?.aborted) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += value;
-        let boundary = buffer.indexOf("\n\n");
-        while (boundary >= 0) {
-          const frame = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          const lines = frame.split("\n");
-          const eventId = lines.find((line) => line.startsWith("id:"))?.slice(3).trimStart();
-          const data = lines
-            .filter((line) => line.startsWith("data:"))
-            .map((line) => line.slice(5).trimStart())
-            .join("\n");
-          if (data !== "" && (eventId === undefined || !seenEventIds.has(eventId))) {
-            const event = JSON.parse(data) as RunEvent;
-            onEvent(event);
-            if (
-              event.type === "completed" || event.type === "failed" ||
-              (event.type === "status" && ["completed", "failed", "cancelled"].includes(event.status))
-            ) return;
+      try {
+        while (!signal?.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary >= 0) {
+            const frame = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            const lines = frame.split("\n");
+            const eventId = lines.find((line) => line.startsWith("id:"))?.slice(3).trimStart();
+            const data = lines
+              .filter((line) => line.startsWith("data:"))
+              .map((line) => line.slice(5).trimStart())
+              .join("\n");
+            if (data !== "" && (eventId === undefined || !seenEventIds.has(eventId))) {
+              const event = JSON.parse(data) as RunEvent;
+              onEvent(event);
+              if (
+                event.type === "completed" || event.type === "failed" ||
+                (event.type === "status" && ["completed", "failed", "cancelled"].includes(event.status))
+              ) return;
+            }
+            if (eventId !== undefined) {
+              seenEventIds.add(eventId);
+              lastEventId = eventId;
+            }
+            boundary = buffer.indexOf("\n\n");
           }
-          if (eventId !== undefined) {
-            seenEventIds.add(eventId);
-            lastEventId = eventId;
-          }
-          boundary = buffer.indexOf("\n\n");
         }
+      } finally {
+        await reader.cancel().catch(() => {});
+        reader.releaseLock();
       }
       await abortableDelay(750, signal);
     }

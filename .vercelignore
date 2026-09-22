@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+.data
+target
+pkg
+artifacts
+**/node_modules
+**/dist
+docs/api-reference
+docs/.vitepress/cache

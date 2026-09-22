@@ -14,10 +14,12 @@ import { ADAPTER_PROTOCOL_VERSION } from "./types.js";
 
 export * from "./types.js";
 
+/** Returns a typed adapter implementation. Use runConformanceSuite to check its protocol behavior. */
 export function defineAdapter(adapter: GeneticAssemblyAdapter): GeneticAssemblyAdapter {
   return adapter;
 }
 
+/** Serves an adapter over newline-delimited JSON on stdin/stdout. Reserve stdout for protocol responses. */
 export async function serveAdapter(adapter: GeneticAssemblyAdapter): Promise<void> {
   let context: AdapterContext | undefined;
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
@@ -175,6 +177,7 @@ function writeResponse(response: ResponseEnvelope): void {
   process.stdout.write(`${JSON.stringify(response)}\n`);
 }
 
+/** Checks initialization, capabilities, dimensions, ordered candidate IDs, repeatability, and optional materialization. */
 export async function runConformanceSuite(
   adapter: GeneticAssemblyAdapter,
   problem: AdapterContext["problem"],

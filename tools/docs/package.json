@@ -1,0 +1,12 @@
+{
+  "name": "@genetic-assembly/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "dev": "npm run generate && vitepress dev ../../docs",
+    "build": "npm run generate && vitepress build ../../docs",
+    "test": "node tests/site.mjs && node tests/browser.mjs"
+  },
+  "version": "0.2.1"
+}

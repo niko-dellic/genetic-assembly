@@ -1,6 +1,6 @@
 {
   "name": "genetic-assembly",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Native Rust NSGA-II local optimization companion",
   "type": "module",
@@ -12,7 +12,7 @@
     "status": "docker compose ps",
     "logs": "docker compose logs -f server postgres",
     "build": "cargo build --workspace && npm run headless:build && npm run adapter-sdk:build && npm run cli:build && npm run reference:build && npm run client:build && npm run viz:build && npm run demo:build",
-    "test": "cargo test --workspace && npm run headless:type-check && npm run adapter-sdk:test && npm run cli:build && npm run reference:test && npm run client:type-check && npm run viz:type-check && npm run viz:test && npm run demo:type-check",
+    "test": "cargo test --workspace && npm run headless:type-check && npm run adapter-sdk:test && npm run cli:build && npm run reference:test && npm run client:type-check && npm run viz:type-check && npm run viz:test && npm run demo:type-check && npm run test:streams",
     "server": "cargo run -p genetic-assembly-server",
     "client:install": "npm --prefix client install",
     "client:build": "npm --prefix client run build",
@@ -37,7 +37,19 @@
     "demo:dev": "npm --prefix demo run dev",
     "demo:build": "npm --prefix demo run build",
     "demo:type-check": "npm --prefix demo run type-check",
-    "demo:preview": "npm --prefix demo run preview"
+    "demo:preview": "npm --prefix demo run preview",
+    "build:packages": "node scripts/packages.mjs build",
+    "pack": "node scripts/packages.mjs pack",
+    "pack:check": "node scripts/packages.mjs check",
+    "test:packed": "node tools/docs/tests/packed.mjs",
+    "docs:install": "npm ci",
+    "docs:dev": "npm run build:packages && npm --prefix tools/docs run dev",
+    "docs:api": "npm run build:packages && npm --prefix tools/docs run generate",
+    "docs:build": "npm run build:packages && npm --prefix tools/docs run build",
+    "docs:test": "npm run docs:build && npm --prefix tools/docs test",
+    "docs:record": "node tools/docs/record.mjs",
+    "test:streams": "npm run headless:build && npm run client:build && node scripts/test-streams.mjs",
+    "test:consumer-companion": "node tools/docs/tests/companion.mjs"
   },
   "keywords": [
     "rust",
@@ -47,5 +59,23 @@
     "multi-objective-optimization"
   ],
   "author": "nikodellic",
-  "license": "MIT"
+  "license": "MIT",
+  "workspaces": [
+    "tools/docs"
+  ],
+  "devDependencies": {
+    "vitepress": "1.6.4",
+    "typedoc": "0.28.20",
+    "typedoc-plugin-markdown": "4.13.1",
+    "typescript": "~5.9.3",
+    "shiki": "2.5.0",
+    "playwright": "^1.55.0",
+    "three": "^0.180.0",
+    "@types/three": "^0.180.0",
+    "d3": "^7.9.0",
+    "@types/node": "^24.7.2"
+  },
+  "overrides": {
+    "rollup": "4.62.2"
+  }
 }

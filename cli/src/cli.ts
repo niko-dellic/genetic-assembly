@@ -145,7 +145,7 @@ const composeTemplate = `services:
     ports: ["\${GA_POSTGRES_PORT:-55433}:5432"]
     volumes: ["ga-postgres:/var/lib/postgresql/data"]
   companion:
-    image: \${GA_IMAGE:-ghcr.io/niko-dellic/genetic-assembly:0.2.0}
+    image: \${GA_IMAGE:-ghcr.io/niko-dellic/genetic-assembly:0.2.1}
     environment:
       DATABASE_URL: postgres://genetic_assembly:genetic_assembly@postgres:5432/genetic_assembly
       GA_BIND: 0.0.0.0:3001

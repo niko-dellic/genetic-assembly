@@ -5,3 +5,12 @@ dist
 .data
 .env
 .DS_Store
+
+/artifacts/
+/docs/api-reference/
+/docs/.vitepress/cache/
+/.vercel/
+.env.local
+.env.*.local
+
+/docs/public/schemas/
