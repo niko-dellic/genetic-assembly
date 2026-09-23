@@ -177,7 +177,11 @@ for (let i = 0; ; i++) {
     await new Promise((r) => setTimeout(r, 100));
   }
 }
-assert.equal((await recovery.wait(timeout())).status, "completed");
+// A crashed executor retains its two-minute lease (executor.rs). Recovery must
+// allow that lease to expire before spending the normal execution budget.
+const recoveryTimeout = AbortSignal.timeout(120000 + 120000);
+console.log("Waiting for the executor lease to expire and the run to recover");
+assert.equal((await recovery.wait(recoveryTimeout)).status, "completed");
 const recovered = await all(recovery.id);
 assert.equal(new Set(recovered.map((r) => r.id)).size, recovered.length);
 const control = await api.run(study.id, {

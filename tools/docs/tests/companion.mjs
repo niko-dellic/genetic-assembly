@@ -15,11 +15,11 @@ const root = fileURLToPath(new URL("../../../", import.meta.url));
 const directory = realpathSync(mkdtempSync(join(tmpdir(), "ga-companion-")));
 const project = `acceptance-${process.pid}`;
 const port = Number(process.env.GA_TEST_PORT ?? 43171);
-const run = (command, args) =>
+const run = (command, args, timeout = 300000) =>
   execFileSync(command, args, {
     cwd: directory,
     stdio: "inherit",
-    timeout: 300000,
+    timeout,
   });
 try {
   const artifacts = JSON.parse(
@@ -58,7 +58,8 @@ try {
     resolve(root, "tools/docs/tests/study-acceptance.mjs"),
     join(directory, "acceptance.mjs"),
   );
-  run("node", ["acceptance.mjs", String(port)]);
+  // Includes the crash-recovery lease wait as well as all normal run checks.
+  run("node", ["acceptance.mjs", String(port)], 600000);
   cpSync(
     resolve(root, "tools/docs/tests/failure-acceptance.mjs"),
     join(directory, "failure.mjs"),
