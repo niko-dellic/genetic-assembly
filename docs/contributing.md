@@ -33,3 +33,11 @@ The brief library introduction lives at `https://genetic-assembly.vercel.app/`. 
 ## Publish static documentation
 
 `npm run docs:deploy` builds the site and validates a separate public-only deployment directory before publishing it to the configured Vercel project. It resolves source paths relative to the script, so the calling directory cannot change the payload. Missing pages, hidden files and symlinks stop publication. Use `node tools/docs/deploy-static.mjs --prepare-only` to inspect the staged output without publishing.
+
+## Shared documentation style
+
+This site uses VitePress 1.6.4's default theme, native light/dark mode, and the
+CSS-only `@nikodellic/publisher-docs` package in `tools/docs/vendor/`. The sibling
+`publisher-docs` repository owns the stylesheet and a minimal starter. Update its
+archive and lockfile together across Genetic Assembly, grabm, and Quilt.
+Embedded-example tokens remain local and do not control the documentation shell.

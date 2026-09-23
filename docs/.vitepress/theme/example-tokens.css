@@ -1,3 +1,4 @@
+/* Tokens for embedded examples; the docs shell uses VitePress variables. */
 :root {
   /* Syntax colors describe code roles independently of the selected accent palette. */
   --code-foreground: var(--ink);
@@ -24,9 +25,6 @@
   --abm-series-3: var(--graph-agent-road);
   --abm-series-4: var(--cluster-3);
   --abm-series-5: var(--error);
-  color: var(--ink);
-  color-scheme: dark;
-  background: var(--page);
   --ink: #e9eee8;
   --muted: #8d9990;
   --panel: #111614;
@@ -67,7 +65,6 @@
 }
 
 :root:not(.dark) {
-  color-scheme: light;
   --code-token-keyword: #6d28d9;
   --code-token-string: #166534;
   --code-token-constant: #1d4ed8;
@@ -75,9 +72,6 @@
   --code-token-parameter: #9a3412;
   --code-token-comment: #57636d;
   --code-token-punctuation: #475569;
-  color: var(--ink);
-  color-scheme: light;
-  background: var(--page);
   --ink: #27312c;
   --muted: #68756e;
   --panel: #f8faf7;

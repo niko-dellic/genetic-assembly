@@ -91,23 +91,11 @@ try {
     .getByRole("link", { name: "Read the documentation", exact: true })
     .click();
   await page.waitForURL("**/docs/");
-  await page.getByLabel("Color palette").first().selectOption("violet");
-  assert.equal(
-    await page.locator("html").getAttribute("data-palette"),
-    "violet",
-  );
-  await page.reload();
-  await hydrated();
-  assert.equal(
-    await page.locator("html").getAttribute("data-palette"),
-    "violet",
-  );
   // Theme colors must settle in the same frame, without delayed navbar/search fades.
   for (const path of ["/", "/docs/"]) {
     await page.goto(url + path);
     await hydrated();
-    for (const palette of ["neutral", "green", "blue", "violet"]) {
-      await page.getByLabel("Color palette").first().selectOption(palette);
+    for (const palette of ["neutral"]) {
       await page.waitForTimeout(550);
       for (let direction = 0; direction < 2; direction++) {
         const frames = await page.evaluate(async () => {
@@ -166,7 +154,6 @@ try {
   await page.goto(url);
   await hydrated();
   await page.getByRole("button", { name: /mobile navigation/i }).click();
-  await page.getByLabel("Color palette").last().selectOption("green");
   await page.waitForFunction(() => {
     const menu = document.querySelector(".VPNavScreen");
     return (
@@ -181,7 +168,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    "Browser checks passed: navigation, search, palettes, dark mode, recorded charts, and mobile menu.",
+    "Browser checks passed: navigation, search, dark mode, recorded charts, and mobile menu.",
   );
 } finally {
   await browser?.close();

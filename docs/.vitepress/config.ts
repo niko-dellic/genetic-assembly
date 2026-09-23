@@ -1,6 +1,5 @@
 import { defineConfig } from "vitepress";
 import { fileURLToPath } from "node:url";
-import { syntaxTheme } from "./syntax-theme";
 const group = (text: string, items: [string, string][]) => ({
   text,
   items: items.map(([text, link]) => ({
@@ -9,6 +8,7 @@ const group = (text: string, items: [string, string][]) => ({
   })),
 });
 export default defineConfig({
+  markdown: { theme: { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' } },
   title: "Genetic Assembly",
   description:
     "Optimization for your application. Setup, integration guides, and complete public API reference.",
@@ -22,7 +22,6 @@ export default defineConfig({
   cleanUrls: false,
   outDir: "dist",
   lastUpdated: true,
-  markdown: { theme: syntaxTheme },
   vite: {
     server: { host: "127.0.0.1", port: 4176, strictPort: true },
     worker: { format: "es" },
@@ -131,17 +130,15 @@ export default defineConfig({
       },
     ],
     ["link", { rel: "manifest", href: "/site.webmanifest" }],
-    [
-      "script",
-      {},
-      `(() => {
-    const root = document.documentElement;
-    const restore = value => root.dataset.palette = ['neutral','green','blue','violet'].includes(value) ? value : 'neutral';
-    try { restore(localStorage.getItem('genetic-assembly-palette')); } catch { restore(null); }
-    window.addEventListener('storage', event => { if(event.key === 'genetic-assembly-palette' || event.key === null) restore(event.newValue); });
-    const sync = () => { const theme = root.classList.contains('dark') ? 'dark' : 'light'; root.dataset.theme = theme; document.dispatchEvent(new CustomEvent('genetic-assembly:themechange', {detail:{theme,palette:root.dataset.palette}})); };
-    new MutationObserver(sync).observe(root, {attributes:true,attributeFilter:['class','data-palette']}); sync();
-  })();`,
-    ],
+    ['script', {}, `(() => {
+      const root = document.documentElement;
+      root.dataset.palette = 'neutral';
+      const sync = () => {
+        root.dataset.theme = root.classList.contains('dark') ? 'dark' : 'light';
+        document.dispatchEvent(new CustomEvent("genetic-assembly:themechange", { detail: { theme: root.dataset.theme, palette: 'neutral' } }));
+      };
+      new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ['class'] });
+      sync();
+    })();`],
   ],
 });
