@@ -1,10 +1,29 @@
 # @genetic-assembly/sdk
 
-Define an optimization study once, then validate, run, compare and export it.
+Define a study, evaluate its baseline, optimize, inspect evidence and export.
 
-Browser-safe client: `import { StudyClient } from '@genetic-assembly/sdk'`.
-Model runtime: `import { defineStudy } from '@genetic-assembly/sdk/node'`.
+```js
+import {Optimizer, defineStudy} from '@genetic-assembly/sdk'
+const study = defineStudy({
+  name:'Example',version:'1',inputs:{},
+  decisions:{x:{kind:'real',lower:0,upper:1,baseline:0.5}},
+  objectives:{cost:{metric:'cost',direction:'minimize'}},
+  evaluate:({x})=>({metrics:{cost:Number(x)**2}}),
+})
+const optimizer = new Optimizer()
+try {
+  await optimizer.baseline(study)
+  const run = optimizer.run(study,{populationSize:12,generations:4,seed:42})
+  await run.wait()
+  console.log(run.results())
+  const bytes = await optimizer.export()
+} finally { optimizer.dispose() }
+```
 
-Install the local SDK and CLI tarballs, run `ga init`, then `ga up`, `ga check`, `ga baseline`, `ga run`, and `ga inspect`.
+Local execution uses packaged Rust WebAssembly in Node/browser workers. No Docker or Rust is needed in consumers. Memory retention defaults to 256 MiB; exports are explicit data-only archives, not resumable checkpoints.
 
-The companion owns durable history. Full replays are retained for baselines and explicitly selected candidates. npm publication is deferred.
+Use `execution:'service'` with a prepared study for durable companion jobs. Node adapter/filesystem helpers live under `/node`. `defineWorkerStudy` and `serveEvaluator` support explicit module evaluators without serializing closures.
+
+[Local guide](https://genetic-assembly.vercel.app/docs/local.html) · [API](https://genetic-assembly.vercel.app/docs/api-reference/sdk/)
+
+npm publication remains deferred; install coordinated local tarballs.

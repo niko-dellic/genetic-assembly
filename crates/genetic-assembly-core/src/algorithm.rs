@@ -3,6 +3,7 @@ use crate::sorting::{assign_crowding, fast_non_dominated_sort};
 use crate::*;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,6 +14,7 @@ pub enum RunControl {
     Stop,
 }
 
+#[cfg(feature = "parallel")]
 pub fn run_nsga2<E, O>(
     problem: ProblemSpec,
     config: Nsga2Config,
@@ -91,119 +93,247 @@ where
     F: Fn(&[EvaluationRequest]) -> Result<Vec<EvaluatedCandidate>, SolverError>,
     O: FnMut(&Checkpoint, &GenerationSummary) -> RunControl,
 {
-    let directions: Vec<_> = problem
-        .objectives
-        .iter()
-        .map(|objective| objective.direction)
-        .collect();
-
-    let (mut generation, mut population, mut evaluations) = if let Some(checkpoint) = resume {
-        validate_checkpoint(&problem, &config, &checkpoint)?;
-        let evaluations = checkpoint.population.len() as u64
-            + checkpoint.generation as u64 * config.population_size as u64;
-        (checkpoint.generation, checkpoint.population, evaluations)
-    } else {
-        let genes = if let Some(operators) = operators {
-            let request = SeedPopulationRequest {
-                size: config.population_size,
-                seeds: (0..config.population_size)
-                    .map(|index| operation_seed(config.seed, usize::MAX, index))
-                    .collect(),
-            };
-            let genes = operators
-                .seed_population(&request)
-                .map_err(SolverError::GenomeOperation)?;
-            if genes.len() != config.population_size {
-                return Err(SolverError::GenomeOperation(EvaluationError::new(format!(
-                    "seed_population returned {} candidates, expected {}",
-                    genes.len(),
-                    config.population_size
-                ))));
-            }
-            genes
-        } else {
-            let mut rng = generation_rng(config.seed, usize::MAX);
-            (0..config.population_size)
-                .map(|_| random_genes(&problem.variables, &mut rng))
-                .collect()
-        };
-        validate_gene_batch(&problem, &genes).map_err(SolverError::GenomeOperation)?;
-        let population = evaluate_candidate_batch(&evaluate, &problem, genes, 0)?;
-        (0, population, config.population_size as u64)
-    };
-
-    rank_and_crowd(&mut population, &directions);
-    while generation < config.generations && !cancellation.load(Ordering::Relaxed) {
-        let mut rng = generation_rng(config.seed, generation);
-        let mutation_probability = config
-            .mutation_probability
-            .unwrap_or(1.0 / problem.variables.len() as f64);
-        let variation = Variation {
-            crossover_probability: config.crossover_probability,
-            mutation_probability,
-            sbx_distribution_index: config.sbx_distribution_index,
-            mutation_distribution_index: config.mutation_distribution_index,
-        };
-        let base_id = (generation as u64 + 1) * config.population_size as u64;
-        let genes = if let Some(operators) = operators {
-            let requests: Vec<_> = (0..config.population_size)
-                .map(|index| {
-                    let left = tournament(&population, &mut rng);
-                    let right = tournament(&population, &mut rng);
-                    OffspringRequest {
-                        id: base_id + index as u64,
-                        left_id: left.id,
-                        left_genes: left.genes.clone(),
-                        right_id: right.id,
-                        right_genes: right.genes.clone(),
-                        seed: operation_seed(config.seed, generation, index),
-                    }
-                })
-                .collect();
-            let generated = operators
-                .make_offspring(&requests)
-                .map_err(SolverError::GenomeOperation)?;
-            validate_generated_candidates(&requests, generated)?
-        } else {
-            (0..config.population_size)
-                .map(|_| {
-                    let left = tournament(&population, &mut rng);
-                    let right = tournament(&population, &mut rng);
-                    make_child(left, right, &problem.variables, &variation, &mut rng)
-                })
-                .collect()
-        };
-        validate_gene_batch(&problem, &genes).map_err(SolverError::GenomeOperation)?;
-        let offspring = evaluate_candidate_batch(&evaluate, &problem, genes, base_id)?;
-        evaluations += offspring.len() as u64;
-        population.extend(offspring);
-        population = environmental_selection(population, config.population_size, &directions);
-        generation += 1;
-
-        let checkpoint = checkpoint(&problem, &config, generation, &population);
-        let summary = summarize_generation(generation, evaluations, &population);
-        if observer(&checkpoint, &summary) == RunControl::Stop {
+    let mut session = SolverSession::new(problem, config, resume)?;
+    while let Some(requests) = session.ask_with_operators(operators)? {
+        if cancellation.load(Ordering::Relaxed) && session.initialized {
+            break;
+        }
+        session.tell(evaluate(&requests)?)?;
+        if session.generation > 0
+            && observer(&session.checkpoint(), &session.summary()) == RunControl::Stop
+        {
             break;
         }
     }
-
-    rank_and_crowd(&mut population, &directions);
-    let mut pareto_front: Vec<_> = population
-        .iter()
-        .filter(|individual| individual.rank == 0)
-        .cloned()
-        .collect();
-    pareto_front.sort_by_key(|individual| individual.id);
-    let checkpoint = checkpoint(&problem, &config, generation, &population);
-    Ok(OptimizationResult {
-        generations: generation,
-        evaluations,
-        pareto_front,
-        final_population: population,
-        checkpoint,
-    })
+    session.result()
 }
 
+/// Incremental NSGA-II state shared by native and asynchronous runtimes.
+/// A pending batch is stable until accepted; failed submissions do not advance state.
+pub struct SolverSession {
+    problem: ProblemSpec,
+    config: Nsga2Config,
+    generation: usize,
+    population: Vec<Individual>,
+    evaluations: u64,
+    initialized: bool,
+    pending: Option<Vec<EvaluationRequest>>,
+}
+
+impl SolverSession {
+    pub fn new(
+        problem: ProblemSpec,
+        config: Nsga2Config,
+        resume: Option<Checkpoint>,
+    ) -> Result<Self, SolverError> {
+        validate_problem_config(&problem, &config)?;
+        let (generation, population, initialized) = if let Some(checkpoint) = resume {
+            validate_checkpoint(&problem, &config, &checkpoint)?;
+            (checkpoint.generation, checkpoint.population, true)
+        } else {
+            (0, Vec::new(), false)
+        };
+        let evaluations = if initialized {
+            (generation as u64 + 1) * config.population_size as u64
+        } else {
+            0
+        };
+        Ok(Self {
+            problem,
+            config,
+            generation,
+            population,
+            evaluations,
+            initialized,
+            pending: None,
+        })
+    }
+
+    pub fn ask(&mut self) -> Result<Option<Vec<EvaluationRequest>>, SolverError> {
+        self.ask_with_operators(None)
+    }
+
+    fn ask_with_operators(
+        &mut self,
+        operators: Option<&dyn GenomeOperator>,
+    ) -> Result<Option<Vec<EvaluationRequest>>, SolverError> {
+        if let Some(pending) = &self.pending {
+            return Ok(Some(pending.clone()));
+        }
+        if self.initialized && self.generation >= self.config.generations {
+            return Ok(None);
+        }
+        let problem = &self.problem;
+        let config = &self.config;
+        let generation = self.generation;
+        let population = &self.population;
+        let (genes, base_id) = if !self.initialized {
+            let genes = if let Some(operators) = operators {
+                let request = SeedPopulationRequest {
+                    size: config.population_size,
+                    seeds: (0..config.population_size)
+                        .map(|index| operation_seed(config.seed, usize::MAX, index))
+                        .collect(),
+                };
+                let genes = operators
+                    .seed_population(&request)
+                    .map_err(SolverError::GenomeOperation)?;
+                if genes.len() != config.population_size {
+                    return Err(SolverError::GenomeOperation(EvaluationError::new(format!(
+                        "seed_population returned {} candidates, expected {}",
+                        genes.len(),
+                        config.population_size
+                    ))));
+                }
+                genes
+            } else {
+                let mut rng = generation_rng(config.seed, u64::MAX);
+                (0..config.population_size)
+                    .map(|_| random_genes(&problem.variables, &mut rng))
+                    .collect()
+            };
+            validate_gene_batch(problem, &genes).map_err(SolverError::GenomeOperation)?;
+
+            (genes, 0)
+        } else {
+            let mut rng = generation_rng(config.seed, generation as u64);
+            let mutation_probability = config
+                .mutation_probability
+                .unwrap_or(1.0 / problem.variables.len() as f64);
+            let variation = Variation {
+                crossover_probability: config.crossover_probability,
+                mutation_probability,
+                sbx_distribution_index: config.sbx_distribution_index,
+                mutation_distribution_index: config.mutation_distribution_index,
+            };
+            let base_id = (generation as u64 + 1) * config.population_size as u64;
+            let genes = if let Some(operators) = operators {
+                let requests: Vec<_> = (0..config.population_size)
+                    .map(|index| {
+                        let left = tournament(population, &mut rng);
+                        let right = tournament(population, &mut rng);
+                        OffspringRequest {
+                            id: base_id + index as u64,
+                            left_id: left.id,
+                            left_genes: left.genes.clone(),
+                            right_id: right.id,
+                            right_genes: right.genes.clone(),
+                            seed: operation_seed(config.seed, generation, index),
+                        }
+                    })
+                    .collect();
+                let generated = operators
+                    .make_offspring(&requests)
+                    .map_err(SolverError::GenomeOperation)?;
+                validate_generated_candidates(&requests, generated)?
+            } else {
+                (0..config.population_size)
+                    .map(|_| {
+                        let left = tournament(population, &mut rng);
+                        let right = tournament(population, &mut rng);
+                        make_child(left, right, &problem.variables, &variation, &mut rng)
+                    })
+                    .collect()
+            };
+            validate_gene_batch(problem, &genes).map_err(SolverError::GenomeOperation)?;
+
+            (genes, base_id)
+        };
+        let requests: Vec<_> = genes
+            .into_iter()
+            .enumerate()
+            .map(|(index, genes)| EvaluationRequest {
+                id: base_id + index as u64,
+                genes,
+            })
+            .collect();
+        self.pending = Some(requests.clone());
+        Ok(Some(requests))
+    }
+
+    pub fn tell(&mut self, evaluated: Vec<EvaluatedCandidate>) -> Result<(), SolverError> {
+        let requests = self
+            .pending
+            .as_ref()
+            .ok_or_else(|| SolverError::InvalidConfig("ask must precede tell".into()))?;
+        let constraints = self
+            .population
+            .first()
+            .map(|item| item.constraints.len())
+            .or_else(|| {
+                evaluated
+                    .first()
+                    .map(|item| item.evaluation.constraints.len())
+            });
+        if evaluated
+            .iter()
+            .any(|item| Some(item.evaluation.constraints.len()) != constraints)
+        {
+            return Err(SolverError::InvalidConfig(
+                "constraint dimensions changed within a run".into(),
+            ));
+        }
+        let mut accepted = accept_candidate_batch(&self.problem, requests, evaluated)?;
+        let directions: Vec<_> = self
+            .problem
+            .objectives
+            .iter()
+            .map(|o| o.direction)
+            .collect();
+        let count = accepted.len() as u64;
+        if self.initialized {
+            let mut combined = self.population.clone();
+            combined.extend(accepted);
+            self.population =
+                environmental_selection(combined, self.config.population_size, &directions);
+            self.generation += 1;
+        } else {
+            rank_and_crowd(&mut accepted, &directions);
+            self.population = accepted;
+            self.initialized = true;
+        }
+        self.evaluations += count;
+        self.pending = None;
+        Ok(())
+    }
+
+    pub fn checkpoint(&self) -> Checkpoint {
+        checkpoint(
+            &self.problem,
+            &self.config,
+            self.generation,
+            &self.population,
+        )
+    }
+
+    pub fn summary(&self) -> GenerationSummary {
+        summarize_generation(self.generation, self.evaluations, &self.population)
+    }
+
+    pub fn result(&self) -> Result<OptimizationResult, SolverError> {
+        if !self.initialized {
+            return Err(SolverError::InvalidConfig(
+                "initial population has not been evaluated".into(),
+            ));
+        }
+        let mut pareto_front: Vec<_> = self
+            .population
+            .iter()
+            .filter(|i| i.rank == 0)
+            .cloned()
+            .collect();
+        pareto_front.sort_by_key(|i| i.id);
+        Ok(OptimizationResult {
+            generations: self.generation,
+            evaluations: self.evaluations,
+            pareto_front,
+            final_population: self.population.clone(),
+            checkpoint: self.checkpoint(),
+        })
+    }
+}
+
+#[cfg(feature = "parallel")]
 fn evaluate_native_batch<E: Evaluator>(
     pool: &rayon::ThreadPool,
     evaluator: &E,
@@ -228,24 +358,11 @@ fn evaluate_native_batch<E: Evaluator>(
     results.into_iter().collect()
 }
 
-fn evaluate_candidate_batch<F>(
-    evaluate: &F,
+fn accept_candidate_batch(
     problem: &ProblemSpec,
-    genes: Vec<Vec<f64>>,
-    base_id: u64,
-) -> Result<Vec<Individual>, SolverError>
-where
-    F: Fn(&[EvaluationRequest]) -> Result<Vec<EvaluatedCandidate>, SolverError>,
-{
-    let requests: Vec<_> = genes
-        .into_iter()
-        .enumerate()
-        .map(|(index, genes)| EvaluationRequest {
-            id: base_id + index as u64,
-            genes,
-        })
-        .collect();
-    let evaluated = evaluate(&requests)?;
+    requests: &[EvaluationRequest],
+    evaluated: Vec<EvaluatedCandidate>,
+) -> Result<Vec<Individual>, SolverError> {
     if evaluated.len() != requests.len() {
         return Err(SolverError::BatchEvaluation(EvaluationError::new(format!(
             "backend returned {} evaluations, expected {}",
@@ -265,7 +382,7 @@ where
         .map(|candidate| (candidate.id, candidate))
         .collect();
     requests
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(index, request)| {
             let candidate = by_id.remove(&request.id).expect("ID set was validated");
@@ -444,8 +561,7 @@ fn checkpoint(
     }
 }
 
-fn generation_rng(seed: u64, generation: usize) -> ChaCha20Rng {
-    let generation = generation as u64;
+fn generation_rng(seed: u64, generation: u64) -> ChaCha20Rng {
     let mixed = seed
         ^ generation
             .wrapping_add(0x9e37_79b9_7f4a_7c15)
@@ -486,8 +602,7 @@ fn validate_gene_batch(problem: &ProblemSpec, batch: &[Vec<f64>]) -> Result<(), 
                     (*gene - rounded).abs() <= f64::EPSILON
                         && rounded >= *lower as f64
                         && rounded <= *upper as f64
-                        && ((rounded as i128 - *lower as i128) % *step as i128 == 0
-                            || rounded == *upper as f64)
+                        && (rounded as i128 - *lower as i128) % *step as i128 == 0
                 }
                 Variable::Categorical { choices } => {
                     gene.fract() == 0.0 && *gene >= 0.0 && *gene < *choices as f64

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {serveLocalInspector} from "./local-inspector.js";
 import { spawnSync } from "node:child_process";
 import {
   readFileSync,
@@ -14,16 +15,18 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import {
   StudyClient,
+  Optimizer,
   validateStudy,
   type Runtime,
   type StudySpec,
 } from "@genetic-assembly/sdk";
 import { checkStudy } from "@genetic-assembly/sdk/node";
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 const root = process.cwd(),
   directory = join(root, ".genetic-assembly"),
   packageRoot = fileURLToPath(new URL("../", import.meta.url));
 interface Config {
+  execution?: "local" | "service";
   entry: string;
   files: string[];
   project: string;
@@ -76,7 +79,7 @@ function compose(c: Config, params: string[]) {
   return run("docker", [
     "compose",
     "-p",
-    `ga-${c.project}-v2`,
+    `ga-${c.project}-v4`,
     "-f",
     join(directory, "compose.json"),
     ...params,
@@ -219,7 +222,7 @@ async function snapshot(
       .status !== 0
   )
     run("docker", ["build", "-t", image, context]);
-  const volume = `ga-${c.project}-snapshots-v2`;
+  const volume = `ga-${c.project}-snapshots-v4`;
   run("docker", ["volume", "create", volume]);
   run("docker", [
     "run",
@@ -326,11 +329,33 @@ async function prepare(c: Config) {
 }
 async function main() {
   if (command === "init") {
+    const manifestPath = join(root, "package.json");
+    const manifest = existsSync(manifestPath)
+      ? JSON.parse(readFileSync(manifestPath, "utf8"))
+      : { private: true };
+    if (
+      manifest === null || typeof manifest !== "object" || Array.isArray(manifest) ||
+      (manifest.scripts !== undefined &&
+        (manifest.scripts === null || typeof manifest.scripts !== "object" || Array.isArray(manifest.scripts)))
+    ) throw Error("package.json and its scripts field must be objects");
+    manifest.scripts ??= {};
+    let scriptsChanged = false;
+    for (const task of ["check", "up", "baseline", "run", "inspect", "status", "logs", "down"]) {
+      const name = `ga:${task}`;
+      if (!Object.hasOwn(manifest.scripts, name)) {
+        manifest.scripts[name] = `ga ${task}`;
+        scriptsChanged = true;
+      } else if (manifest.scripts[name] !== `ga ${task}`) {
+        console.log(`Kept existing npm script ${name}`);
+      }
+    }
+    if (scriptsChanged) writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
     mkdirSync(directory, { recursive: true });
     writeNew(
       join(root, "ga.config.json"),
       JSON.stringify(
         {
+          execution: "local",
           entry: "study.mjs",
           files: ["study.mjs"],
           project: "my-study",
@@ -348,17 +373,55 @@ async function main() {
         : sample,
     );
     console.log(
-      "Created study.mjs and ga.config.json. Run ga check, ga up, ga baseline, ga run, then ga inspect.",
+      "Initialized study.mjs, ga.config.json and npm scripts. Run npm run ga:check, npm run ga:baseline, then npm run ga:run -- --inspect. Existing files and scripts are preserved.",
     );
     return;
   }
   if (command === "help") {
     console.log(
-      "ga init [--template grabm] | check | up | baseline | run | inspect | status | logs | down | backup <directory> | cleanup\nModels use study.mjs; ga.config.json declares snapshot files. Storage uses a separate v2 namespace.",
+      "ga init [--template grabm] | check | up | baseline | run | inspect | status | logs | down | backup <directory> | cleanup\nModels use study.mjs; ga.config.json declares snapshot files. Storage uses a separate v4 namespace.",
     );
     return;
   }
+  if (command === "inspect" && args[1] && !args[1].startsWith("--")) {
+    if (lstatSync(resolve(args[1])).size > 512 * 1024 * 1024) throw Error("Archive exceeds the 512 MiB inspection limit");
+    const server = await serveLocalInspector({assets:join(packageRoot,"backend/inspector/public"),archive:readFileSync(resolve(args[1]))});
+    console.log(`Read-only archive inspector: ${server.url}. Press Ctrl+C to close.`);
+    return;
+  }
   const c = config();
+  const service = args.includes("--service") || c.execution === "service" || !!c.baseUrl;
+  if (!service && ["baseline", "run", "inspect"].includes(command)) {
+    const model = (await import(pathToFileURL(safePath(c.entry)).href)).default;
+    const optimizer = new Optimizer();
+    let inspector: Awaited<ReturnType<typeof serveLocalInspector>> | undefined;
+    const stop = () => {optimizer.dispose(); void inspector?.close();};
+    process.once("SIGINT", stop); process.once("SIGTERM", stop);
+    try {
+      if (args.includes("--inspect") || command === "inspect") {
+        inspector = await serveLocalInspector({assets:join(packageRoot,"backend/inspector/public"),optimizer,model});
+        console.log(`Local inspector: ${inspector.url}. Press Ctrl+C to close.`);
+      }
+      const baseline = await optimizer.baseline(model);
+      console.log("Baseline:", JSON.stringify(baseline));
+      if (command === "run") {
+        const value = (flag:string,fallback:number) => {const index=args.indexOf(flag);return index < 0 ? fallback : Number(args[index+1]);};
+        const run = optimizer.run(model,{populationSize:value("--population",24),generations:value("--generations",8),seed:value("--seed",42)});
+        const unsubscribe = run.subscribe(status=>console.log(`${status.status}: generation ${status.progress?.generation??0}`));
+        const status = await run.wait(); unsubscribe();
+        if (status.status !== "completed") throw Error(status.error??status.status);
+        const results = run.results();
+        console.log(`Search front: ${results.search.pareto_front.length}; validated front: ${results.validatedFront.length}; retained measurements: ${optimizer.history().length}`);
+      }
+      const exportIndex=args.indexOf("--export");
+      if(exportIndex>=0) {
+        const path=args[exportIndex+1]; if(!path||path.startsWith("--")) throw Error("--export requires a path");
+        writeFileSync(resolve(path),await optimizer.export());console.log(`Exported ${path}`);
+      }
+    } catch(error) {stop();throw error;}
+    finally {if(!inspector){optimizer.dispose();process.removeListener("SIGINT",stop);process.removeListener("SIGTERM",stop);}}
+    return;
+  }
   if (command === "check") {
     const model = (await import(pathToFileURL(safePath(c.entry)).href)).default;
     console.log(JSON.stringify(await checkStudy(model), null, 2));
@@ -382,7 +445,7 @@ async function main() {
       [
         "compose",
         "-p",
-        `ga-${c.project}-v2`,
+        `ga-${c.project}-v4`,
         "-f",
         join(directory, "compose.json"),
         "exec",
@@ -397,8 +460,8 @@ async function main() {
     );
     writeFileSync(join(destination, "database.sql"), sql);
     for (const [name, volume] of [
-      ["artifacts", `ga-${c.project}-v2_artifacts`],
-      ["snapshots", `ga-${c.project}-snapshots-v2`],
+      ["artifacts", `ga-${c.project}-v4_artifacts`],
+      ["snapshots", `ga-${c.project}-snapshots-v4`],
     ])
       run("docker", [
         "run",
@@ -428,10 +491,10 @@ async function main() {
   if (command === "cleanup") {
     if (!args.includes("--delete-data"))
       throw Error(
-        "Cleanup deletes this project’s v2 database, artifacts and snapshots. Add --delete-data to request it explicitly.",
+        "Cleanup deletes this project’s v4 database, artifacts and snapshots. Add --delete-data to request it explicitly.",
       );
     compose(c, ["down", "--volumes"]);
-    run("docker", ["volume", "rm", `ga-${c.project}-snapshots-v2`]);
+    run("docker", ["volume", "rm", `ga-${c.project}-snapshots-v4`]);
     return;
   }
   const api = client(c);
@@ -494,19 +557,19 @@ async function main() {
       const status = await run.status();
       if (status.status !== "completed")
         throw Error(status.error ?? status.status);
-      writeFileSync(
-        join(directory, `run-${run.id}.json`),
-        JSON.stringify(await run.export(), null, 2),
-      );
-      console.log(
-        `Exported run ${run.id}. Open ga inspect to compare designs.`,
-      );
+      const exportIndex = args.indexOf("--export");
+      if (exportIndex >= 0) {
+        const path = args[exportIndex+1];
+        if (!path || path.startsWith("--")) throw Error("--export requires a path");
+        writeFileSync(resolve(path), await run.archive());
+        console.log(`Exported portable archive ${path}. Open it with npm run ga:inspect -- ${path}.`);
+      } else console.log(`Completed durable run ${run.id}. Open npm run ga:inspect -- --service to compare designs.`);
     }
     return;
   }
   throw Error("Unknown command: " + command);
 }
-const sample = `import {defineStudy} from '@genetic-assembly/sdk/node';
+const sample = `import {defineStudy} from '@genetic-assembly/sdk';
 export default defineStudy({
  name:'Two targets',version:'1',inputs:{},
  decisions:{x:{kind:'real',lower:0,upper:1,baseline:0.5}},

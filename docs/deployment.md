@@ -18,4 +18,4 @@ Use `GA_API_TOKEN` for a deployed companion and pass the bearer token to `StudyC
 
 By default artifact bytes live below `GA_ARTIFACT_ROOT`. S3 deployment uses `GA_S3_BUCKET` with the credentials, endpoint and region understood by the server's S3 storage configuration. Preserve the same store and Postgres metadata together. Dataset manifests map resource paths to stored artifacts; moving metadata alone does not move the data.
 
-A database backup plus artifact and snapshot archives is needed for complete recovery. Restore each into a new, empty namespace and test a retained replay before disposing of old data. `ga down` keeps data; `ga cleanup --delete-data` explicitly removes the current managed project's v2 volumes.
+A database backup plus artifact and snapshot archives is needed for complete recovery. Restore each into a new, empty namespace and test a retained replay before disposing of old data. `ga down` keeps data; `ga cleanup --delete-data` explicitly removes the current managed project's v4 volumes.

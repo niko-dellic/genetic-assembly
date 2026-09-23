@@ -7,7 +7,7 @@ The example optimizes one real decision `x` against two targets, `left=x²` and 
 For a managed custom image:
 
 ```dockerfile
-FROM genetic-assembly:0.3.0
+FROM genetic-assembly:0.4.0
 RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
 ```
 

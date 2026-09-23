@@ -28,6 +28,7 @@ export class StudyClient {
   constructor(
     public baseUrl = "http://127.0.0.1:3001",
     private token?: string,
+    private observationSignal?: AbortSignal,
   ) {}
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
@@ -74,7 +75,7 @@ export class StudyClient {
     return this.runHandle(status.id);
   }
   runHandle(id: string) {
-    return new RunHandle(this, id);
+    return new RunHandle(this, id, this.observationSignal);
   }
   runs(studyId: string, offset = 0): Promise<Page<RunStatus>> {
     return this.request(`/v2/studies/${studyId}/runs?offset=${offset}`);
@@ -129,6 +130,15 @@ export class StudyClient {
   datasets(ownerId: string): Promise<DatasetReference[]> {
     return this.request(`/v2/datasets?ownerId=${encodeURIComponent(ownerId)}`);
   }
+  async datasetResource(id: string, key: string): Promise<Uint8Array> {
+    const response = await fetch(
+      this.datasetUrl(id) + key.split("/").map(encodeURIComponent).join("/"),
+      { headers: this.token ? { authorization: `Bearer ${this.token}` } : {} },
+    );
+    if (!response.ok)
+      throw new ApiError(await response.text(), response.status, null);
+    return new Uint8Array(await response.arrayBuffer());
+  }
   datasetUrl(id: string) {
     return `${this.baseUrl}/v2/datasets/${encodeURIComponent(id)}/resources/`;
   }
@@ -151,6 +161,7 @@ export class RunHandle {
   constructor(
     private client: StudyClient,
     public id: string,
+    private observationSignal?: AbortSignal,
   ) {}
   status(): Promise<RunStatus> {
     return this.client.request(`/v2/runs/${this.id}`);
@@ -161,6 +172,11 @@ export class RunHandle {
     });
   }
   async wait(signal?: AbortSignal): Promise<RunStatus> {
+    signal = AbortSignal.any(
+      [signal, this.observationSignal].filter(
+        (value): value is AbortSignal => !!value,
+      ),
+    );
     for (;;) {
       signal?.throwIfAborted();
       const status = await this.status();
@@ -178,10 +194,20 @@ export class RunHandle {
   analytics(): Promise<unknown> {
     return this.client.request(`/v2/runs/${this.id}/analytics`);
   }
+  /** Download a data-only archive including retained baseline and replay resource bytes. */
+  async archive(): Promise<Uint8Array> {
+    const { exportServiceArchive } = await import("./archive.js");
+    return exportServiceArchive(this.client, this.id);
+  }
   export(): Promise<unknown> {
     return this.client.request(`/v2/runs/${this.id}/export`);
   }
   async *progress(signal?: AbortSignal): AsyncGenerator<RunStatus> {
+    signal = AbortSignal.any(
+      [signal, this.observationSignal].filter(
+        (value): value is AbortSignal => !!value,
+      ),
+    );
     for (;;) {
       signal?.throwIfAborted();
       const status = await this.status();
@@ -191,3 +217,35 @@ export class RunHandle {
     }
   }
 }
+export {
+  Optimizer,
+  type OptimizerOptions,
+  type Execution,
+} from "./optimizer.js";
+export {
+  defineStudy,
+  type StudyModel,
+  type EvaluationContext,
+  type ReplayDataset,
+} from "./model.js";
+export {
+  LocalRunHandle,
+  type LocalRunOptions,
+  type LocalResults,
+  type LocalStatus,
+  type CandidateResult,
+} from "./local.js";
+export { RetainedDataLimitError } from "./memory.js";
+
+export {
+  openArchive,
+  ArchiveReader,
+  archiveSchema,
+  type OptimizationArchive,
+} from "./archive.js";
+export {
+  defineWorkerStudy,
+  serveEvaluator,
+  type EvaluatorWorker,
+  type EvaluationWorkerPort,
+} from "./evaluator-worker.js";

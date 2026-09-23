@@ -1,6 +1,6 @@
 {
   "name": "@genetic-assembly/visualizations",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Framework-agnostic optimization visualizations for Genetic Assembly",
   "type": "module",
   "main": "dist/index.js",
@@ -39,7 +39,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "homepage": "https://genetic-assembly-docs.vercel.app/",
+  "homepage": "https://genetic-assembly.vercel.app/docs/",
   "overrides": {
     "rollup": "4.62.2"
   }

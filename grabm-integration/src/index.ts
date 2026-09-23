@@ -6,25 +6,19 @@ import {
   type FacilityData,
   type RunResult,
 } from "@grabm/abm";
-import {
-  runBatch,
-  createFileDatasetStore,
-  type FileDatasetReference,
-} from "@grabm/abm/node";
+import { Scenario, Simulation } from "@grabm/abm";
 import { writeRunDataset } from "@grabm/abm/datasets";
 import { analyzeRun, type AnalysisResult } from "@grabm/abm/analytics";
 import {
   defineStudy,
   type StudyModel,
-  type EvaluationContext,
-} from "@genetic-assembly/sdk/node";
+} from "@genetic-assembly/sdk";
 import {
   canonical,
   type Decisions,
   type Decision,
   type StudyInput,
 } from "@genetic-assembly/sdk";
-import { join } from "node:path";
 export interface ProgramPreset {
   activities: Record<string, number>;
   capacity: number;
@@ -75,6 +69,7 @@ export interface GraphSpace {
   };
 }
 export interface GrabmStudyOptions {
+  execution?: "node" | "browser";
   name: string;
   version: string;
   baseline: SimulationInputData;
@@ -444,7 +439,6 @@ export function defineGrabmStudy(options: GrabmStudyOptions): StudyModel {
     }
 
   const decisions = graphDecisions(baseline, space);
-  const references = new Map<string, FileDatasetReference>();
   const reconstruct = (values: Decisions) =>
     buildGraph(baseline, space, values, options.updateRoute);
   // Reject unsupported route edits before a long optimization can begin.
@@ -479,12 +473,18 @@ export function defineGrabmStudy(options: GrabmStudyOptions): StudyModel {
       const input = reconstruct(values);
       input.run = { ...input.run, seed: context.seed };
       let run: RunResult | undefined;
-      for await (const outcome of runBatch([{ id: "candidate", input }], {
-        workers: 1,
-        signal: context.signal,
-      })) {
-        if (outcome.status === "failed") throw outcome.error;
-        run = outcome.result as RunResult;
+      const execution = options.execution ?? (typeof process !== 'undefined' && process.versions?.node ? 'node' : 'browser');
+      if (execution === 'node') {
+        const moduleName = '@grabm/abm/node';
+        const {runBatch} = await import(/* @vite-ignore */ moduleName);
+        for await (const outcome of runBatch([{id: 'candidate', input}], {workers: 1, signal: context.signal})) {
+          if (outcome.status === 'failed') throw outcome.error;
+          run = outcome.result as RunResult;
+        }
+      } else {
+        const simulation = new Simulation({graph: input.graph, facilities: input.facilities, scenario: new Scenario(input.scenario), execution: 'worker'});
+        try { run = await simulation.run({...input.run, signal: context.signal}); }
+        finally { simulation.dispose(); }
       }
       if (!run) throw Error("Simulation returned no result");
       const analysis = analyzeRun(run);
@@ -492,17 +492,11 @@ export function defineGrabmStudy(options: GrabmStudyOptions): StudyModel {
         ? options.measurements(analysis, input)
         : metrics(analysis, input, run);
       if (context.retainReplay) {
-        const directory = join(context.directory, "dataset");
-        const store = await createFileDatasetStore(directory);
-        const reference = await writeRunDataset(run, store);
-        references.set(context.directory, { ...reference, directory });
+        const resources: Record<string, Uint8Array> = {};
+        const reference = await writeRunDataset(run, {async cleanup() { for (const key of Object.keys(resources)) delete resources[key]; }, async write(key, bytes) {resources[key] = bytes.slice();}});
+        context.retainDataset({...reference, resources});
       }
       return { metrics: valuesMeasured, warnings: analysis.warnings };
-    },
-    async dataset(context: EvaluationContext) {
-      const reference = references.get(context.directory);
-      references.delete(context.directory);
-      return reference;
     },
     materialize: (values) => ({
       decisions: values,

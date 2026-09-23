@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const output = resolve(root, 'docs/api-reference');
-const entries = [ ['sdk','sdk','quickstart'], ['sdk','node','integrating-another-repository','src/node/index.ts'], ['grabm-integration','grabm','grabm'], ['grabm-integration','grabm-browser','replay','src/browser.ts'], ['inspector','inspector','results'], ['headless-client', 'client', 'quickstart'], ['adapter-sdk', 'adapter-sdk', 'integrating-another-repository'], ['client', 'three', 'three'], ['visualizations', 'visualizations', 'visualizations'] ];
+const entries = [ ['sdk','sdk','quickstart'], ['sdk','node','integrating-another-repository','src/node/index.ts'], ['grabm-integration','grabm','grabm'], ['grabm-integration','grabm-browser','replay','src/browser.ts'], ['inspector','inspector','results'], ['client', 'three', 'three'], ['visualizations', 'visualizations', 'visualizations'] ];
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 const index = [], functions = [];
@@ -41,7 +41,7 @@ for (const [directory, slug, guide, entry] of entries) {
 await writeFile(resolve(output, 'index.md'), '# Public API reference\n\nGenerated from the current source. Select an export to see its signature, parameters, return values, and public members.\n\n[All functions and classes](./functions.md)\n\n' + index.join('\n') + '\n\nAlso see the [CLI](../cli.md), [schemas](../schemas.md), [HTTP API](../http-api.md), and [evaluator context](../evaluator-context.md).\n');
 await writeFile(resolve(output, 'functions.md'), '# All public functions and classes\n\n' + functions.join('\n'));
 
-await mkdir(resolve(root, 'docs/public/schemas'), { recursive: true });
-await cp(resolve(root, 'adapter-sdk/schemas'), resolve(root, 'docs/public/schemas'), { recursive: true });
+await mkdir(resolve(root, 'docs/public/docs/schemas'), { recursive: true });
+await cp(resolve(root, 'sdk/schemas'), resolve(root, 'docs/public/docs/schemas'), { recursive: true });
 
-await cp(resolve(root, 'sdk/schemas'), resolve(root, 'docs/public/schemas'), { recursive: true });
+await cp(resolve(root, 'sdk/schemas'), resolve(root, 'docs/public/docs/schemas'), { recursive: true });

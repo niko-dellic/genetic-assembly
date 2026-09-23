@@ -1,6 +1,6 @@
 {
   "name": "@genetic-assembly/cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Scaffold and operate a local Genetic Assembly companion",
   "type": "module",
   "bin": {
@@ -32,7 +32,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "homepage": "https://genetic-assembly-docs.vercel.app/",
+  "homepage": "https://genetic-assembly.vercel.app/docs/",
   "dependencies": {
     "@genetic-assembly/sdk": "file:../sdk"
   }

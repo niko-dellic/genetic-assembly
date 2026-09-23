@@ -10,7 +10,7 @@ let disposed = false
 onMounted(async () => {
   try {
     const { createParetoScatter, createConvergenceHistory, validateDataset } = await import('@genetic-assembly/visualizations')
-    const response = await fetch(withBase('/examples/two-targets.json'))
+    const response = await fetch(withBase('/docs/examples/two-targets.json'))
     if (!response.ok) throw new Error('Recorded results could not be loaded.')
     const { dataset } = await response.json()
     if (disposed) return

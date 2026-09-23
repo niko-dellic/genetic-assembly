@@ -1,4 +1,4 @@
-# Adapter protocol v1
+# Adapter protocol v2
 
 `genetic-assembly-adapter-v2` is newline-delimited JSON over a trusted child process's stdin/stdout. Stdout is protocol-only; diagnostics go to stderr. Every envelope contains `protocol_version`, `request_id`, and `type`. Responses must preserve the request ID.
 
@@ -11,7 +11,7 @@
 5. `materialize` turns retained genomes into project-specific JSON or artifact references. Inline JSON larger than 64 KiB is moved to companion artifact storage.
 6. `cancel` and `shutdown` end the lifecycle. Cancellation kills the adapter process group if a request is blocked.
 
-The complete JSON Schemas are published with `@genetic-assembly/adapter-sdk` under `schemas/`.
+The complete JSON Schemas are published with `@genetic-assembly/sdk` under `schemas/`.
 
 ## Determinism and recovery
 

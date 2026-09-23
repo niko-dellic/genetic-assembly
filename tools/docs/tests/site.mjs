@@ -16,12 +16,14 @@ for(const file of html) {
   assert(existsSync(target)||existsSync(target+'.html')||existsSync(resolve(target,'index.html')),`${file}: broken link ${href}`);
  }
 }
-const context=readFileSync(resolve(root,'crates/genetic-assembly-script/src/lib.rs'),'utf8').split('return Object.freeze({{')[1].split('}});')[0];
 const guide=readFileSync(resolve(root,'docs/evaluator-context.md'),'utf8');
-for(const [,name] of context.matchAll(/^    (\w+): /gm)) assert(guide.includes('`'+name+'('),`Undocumented evaluator function ${name}`);
+for(const name of ['seed','phase','signal','retainReplay','retainDataset']) assert(guide.includes('`'+name),`Undocumented evaluator context ${name}`);
 const server=readFileSync(resolve(root,'crates/genetic-assembly-server/src/lib.rs'),'utf8')+readFileSync(resolve(root,'crates/genetic-assembly-server/src/studies.rs'),'utf8');
 const http=readFileSync(resolve(root,'docs/http-api.md'),'utf8');
 for(const [,route] of server.matchAll(/\.route\(\s*"([^"]+)"/g)) assert(http.includes(route),`Undocumented route ${route}`);
-const recording=JSON.parse(readFileSync(resolve(output,'examples/two-targets.json')));
+const recording=JSON.parse(readFileSync(resolve(output,'docs/examples/two-targets.json')));
 assert(recording.provenance.config.seed===42 && recording.dataset.generations.length===12);
 console.log(`Validated ${html.length} HTML pages, links, evaluator/HTTP coverage, and recorded example.`);
+
+assert(existsSync(resolve(output, 'docs/index.html')), 'Missing /docs entry');
+assert(!readFileSync(resolve(output,'index.html'),'utf8').includes('class="VPSidebar'), 'Homepage must not show the docs sidebar');

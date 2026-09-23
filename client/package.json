@@ -1,6 +1,6 @@
 {
   "name": "@genetic-assembly/three",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Three.js integration for the Genetic Assembly companion",
   "type": "module",
   "main": "dist/index.js",
@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
-    "prepack": "node ../scripts/prepare-package.mjs client"
+    "prepack": "node ../scripts/prepare-package.mjs client",
+    "test": "npm run build && node --test tests/*.mjs"
   },
   "peerDependencies": {
     "three": ">=0.170.0"
@@ -33,5 +34,5 @@
   "publishConfig": {
     "access": "public"
   },
-  "homepage": "https://genetic-assembly-docs.vercel.app/"
+  "homepage": "https://genetic-assembly.vercel.app/docs/"
 }

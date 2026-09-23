@@ -1,35 +1,19 @@
 # Evaluator context
 
-The built-in Three.js evaluator exports `evaluate(ctx)` and returns `{ objectives: number[], constraints: number[] }`. Values must be finite and match declared dimensions. Functions read a candidate's immutable metric snapshot; they do not expose mutable scene objects.
+A study's `evaluate(decisions, inputs, context)` returns `{metrics, warnings?}`. Metrics are named finite numbers. Missing objective or constraint measurements fail the evaluation and remain visible in history.
 
-| Function | Result |
-| --- | --- |
-| `objectCount()` | Number of objects in the input snapshot |
-| `lever(id)` | Numeric value for a declared lever; unknown IDs throw |
-| `visible(id)` | Object visibility |
-| `bounds(id)` | Axis-aligned bounds with `min` and `max` coordinate arrays |
-| `surfaceArea(id)` | Surface area metric |
-| `volume(id)` | Volume metric |
-| `vertexCount(id)` | Vertex count |
-| `triangleCount(id)` | Triangle count |
-| `metadata(id, key)` | Metadata value; missing keys return `undefined` |
-| `property(id, key)` | Numeric property value; missing keys return `undefined` |
-| `centerDistance(left, right)` | Euclidean distance between bounding-box centers |
-| `targetDistance(id, [x, y, z])` | Distance from bounding-box center to target |
-| `overlapVolume(left, right)` | Axis-aligned bounding-box overlap volume |
-| `intersects(left, right)` | True when bounding boxes overlap strictly on every axis; touching alone is false |
-| `targetPenalty(value, target)` | Absolute difference |
-| `rangePenalty(value, minimum, maximum)` | Distance outside the range, or zero inside |
+| Context member | Meaning |
+|---|---|
+| `seed` | Declared simulation seed; independent of the solver seed |
+| `phase` | `baseline`, `search`, `validation`, or `replay` |
+| `signal` | Cooperative cancellation signal; check it between bounded operations |
+| `retainReplay` | Whether this evaluation should produce replay resources |
+| `retainDataset(dataset)` | Retain one dataset with `manifestKey`, `runHash`, and a map of relative paths to `Uint8Array` bytes |
 
-Every object-reading function throws for an unknown object ID. AABB intersection is not exact triangle collision. Use the same spatial units throughout the problem. Surface and volume metrics describe the scene snapshot and its supported transforms.
+Only baseline and selected replay evaluations retain replay resources. Do not attach every search trace. Raw seed measurements remain retained even when no replay exists.
 
-```js
-export function evaluate(ctx) {
-  return {
-    objectives: [ctx.targetDistance('box', [4, 0, 0])],
-    constraints: [ctx.overlapVolume('box', 'obstacle')]
-  };
-}
-```
+`repair(decisions, inputs)` returns canonical decisions and a list of repair messages. `validate(decisions, inputs)` returns domain-invalidity messages; invalid designs become infeasible. Configuration errors, exceptions and invalid measurements remain failures. `materialize(decisions, inputs)` returns portable application data; it does not apply changes to the consumer.
 
-QuickJS enforces configured memory, stack, and time limits. Ambient imports and randomness are rejected. Keep evaluation deterministic and use an external adapter when the model needs a different runtime or richer capabilities.
+Node companion evaluators additionally receive an isolated temporary `directory` for filesystem-oriented integrations. Portable models should use byte resources so the same model can execute in a browser. The companion uploads those resources to its configured artifact store.
+
+For explicit module workers, `serveEvaluator` installs the evaluation message handler. The host supplies the seed, phase and inputs; cancellation terminates the owned worker. For inline evaluation, synchronous code must yield before it can observe `signal`.

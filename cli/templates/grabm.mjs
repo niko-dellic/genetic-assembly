@@ -1,5 +1,5 @@
 import { defineGrabmStudy } from "@genetic-assembly/grabm";
-/** One person leaves home at minute 10 to visit a shop over a 100-metre walking edge. */
+/** Eight residents have fixed shopping demand across a 100-metre walking edge. */
 const input = {
   graph: {
     nodes: [

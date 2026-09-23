@@ -10,6 +10,8 @@ The executable template creates a synthetic neighborhood with eight fixed reside
 - **Access** maximizes grabm analysis `accessibility.coverage15`.
 - **Cost** minimizes a deliberately simple design proxy: sum of facility capacities, plus 10 per facility, plus 0.01 per metre of active edge. These are comparison units, not a financial estimate.
 
+In this tiny neighborhood, all feasible layouts remain within a 15-minute walk, so `coverage15` stays at 1. The visible trade-off is fulfillment versus cost. For a distance-sensitive goal, supply custom measurements from grabm’s accessibility groups (for example `meanNearestMinutes`) and declare the corresponding direction and units.
+
 Search seeds are 42 and 43; validation uses 142 and 143. Capacity and total link-length budgets constrain the search. The home-to-shop walking connection and shopping service remain required.
 
 ## Reuse the graph adapter
@@ -20,6 +22,6 @@ Declare stable slots for movable or optional nodes, optional links, allowed endp
 
 Program presets change activities, capacity settings and classification together. A display label alone does not alter program behavior. Moving endpoints recomputes straight-line geometry. Curved routes or explicit travel-time overrides require an `updateRoute` rule before changing their endpoints.
 
-Each seed executes through grabm's public Node batch API with one child worker. Package assets, including the child entry point, remain in the immutable installed runtime. Baselines and selected replays use grabm's dataset writer, so they reopen through its public readers and playback tools.
+In Node, each seed executes through grabm's public batch API with one child worker. In the browser it uses `Simulation` with an owned module worker; cancellation terminates that worker. Try the [live study](./live-neighborhood). Package assets, including the child entry point, remain in the immutable installed runtime. Baselines and selected replays use grabm's dataset writer, so they reopen through its public readers and playback tools.
 
 [Full integration API](./api-reference/grabm/index.md) · [Replay](./replay.md)

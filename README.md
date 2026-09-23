@@ -2,11 +2,11 @@
 
 Reproducible optimization studies for applications and simulation libraries. Keep your model in your project; use the JavaScript SDK and managed Rust NSGA-II companion to evaluate competing goals, retain evidence, compare candidates and export a selected design.
 
-[Documentation](https://genetic-assembly-docs.vercel.app/) · [First baseline](docs/quickstart.md) · [grabm example](docs/grabm.md)
+[Documentation](https://genetic-assembly.vercel.app/docs/) · [First baseline](docs/quickstart.md) · [grabm example](docs/grabm.md)
 
 ## Local installation
 
-Version 0.3 is a breaking, local-tarball release. npm publication is deferred.
+Version 0.4 is a breaking, local-tarball release. npm publication is deferred.
 
 In this development checkout:
 
@@ -16,24 +16,25 @@ npm run setup
 npm run pack
 ```
 
-In a separate project, with Node 22.12+ and Docker:
+In a separate project, with Node 22.12+:
 
 ```sh
-npm install /path/to/artifacts/genetic-assembly-sdk-0.3.0.tgz /path/to/artifacts/genetic-assembly-cli-0.3.0.tgz
+npm install /path/to/artifacts/genetic-assembly-sdk-0.4.0.tgz /path/to/artifacts/genetic-assembly-cli-0.4.0.tgz
 npx ga init
-npx ga check
-npx ga up
-npx ga baseline
-npx ga run --population 12 --generations 4
-npx ga inspect
+npm run ga:check
+npm run ga:baseline
+npm run ga:run -- --population 12 --generations 4 --export study.ga.json
+npm run ga:inspect -- study.ga.json
 ```
 
-The CLI includes the companion's build recipe and Rust sources. Consumers do not need a checkout or host Rust. It snapshots declared files, inputs and locked dependencies into a versioned Linux runtime; installed package assets and child entry points remain intact.
+Local runs use the packaged Rust/WASM solver in a worker. No Docker or Rust installation is needed. Choose `execution: "service"` in `ga.config.json` for durable history and restart recovery.
+
+For service execution, the CLI includes the companion's build recipe and Rust sources. Consumers do not need a checkout or host Rust. It snapshots declared files, inputs and locked dependencies into a versioned Linux runtime; installed package assets and child entry points remain intact.
 
 ## Define a study
 
 ```js
-import { defineStudy } from '@genetic-assembly/sdk/node'
+import { defineStudy } from '@genetic-assembly/sdk'
 export default defineStudy({
   name: 'Two targets', version: '1', inputs: {},
   decisions: { x: { kind: 'real', lower: 0, upper: 1, baseline: 0.5 } },

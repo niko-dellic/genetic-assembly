@@ -1,6 +1,6 @@
 {
   "name": "@genetic-assembly/sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "Define, run, and inspect reproducible optimization studies",
   "main": "dist/index.js",
@@ -25,9 +25,10 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test tests/*.mjs",
-    "prepack": "node ../scripts/prepare-package.mjs sdk"
+    "build": "tsc -p tsconfig.json && node scripts/copy-wasm.mjs",
+    "test": "npm run build && tsc --noEmit --strict --skipLibCheck --module NodeNext --target ES2022 tests/types/api.ts && node --test tests/*.mjs",
+    "prepack": "node ../scripts/prepare-package.mjs sdk",
+    "build:wasm": "node scripts/build-wasm.mjs"
   },
   "dependencies": {
     "zod": "^4.4.3"

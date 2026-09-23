@@ -4,4 +4,4 @@ The primary workflow is an optimization study. Start with [installation](./insta
 
 For integrations, see [grabm](./grabm.md), [Three.js](./three.md), [Python](./python.md), and the [full API reference](./api-reference/index.md).
 
-Version 0.3 replaces the separate client/adapter SDK installation with `@genetic-assembly/sdk`. Legacy low-level references remain for existing development integrations. Start new applications with the study SDK.
+Version 0.4 replaces the separate client/adapter SDK installation with `@genetic-assembly/sdk`. The former low-level clients have been removed. Start new applications with the study SDK.

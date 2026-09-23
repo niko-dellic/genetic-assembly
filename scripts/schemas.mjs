@@ -1,3 +1,4 @@
+import {archiveSchema} from "../sdk/dist/archive.js";
 import { z } from "../sdk/node_modules/zod/index.js";
 import {
   studySpecSchema,
@@ -8,6 +9,7 @@ import {
 import { mkdirSync, writeFileSync } from "node:fs";
 mkdirSync("sdk/schemas", { recursive: true });
 for (const [name, schema] of Object.entries({
+  archive: archiveSchema,
   study: studySpecSchema,
   evaluation: evaluationSchema,
   measurement: measurementSchema,

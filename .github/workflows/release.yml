@@ -26,6 +26,7 @@ jobs:
         with:
           toolchain: "1.89.0"
           components: clippy
+          targets: wasm32-unknown-unknown
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -35,24 +36,25 @@ jobs:
             inspector/package-lock.json
             grabm-integration/package-lock.json
             package-lock.json
-            headless-client/package-lock.json
-            adapter-sdk/package-lock.json
             cli/package-lock.json
-            examples/reference-adapter/package-lock.json
             client/package-lock.json
             visualizations/package-lock.json
-            demo/package-lock.json
       - run: npm ci
       - run: npm run setup
+      - run: npm --prefix sdk run build:wasm
       - run: npm test
       - run: npm run build
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: npm run pack
+      - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:packed
       - run: docker build -t genetic-assembly:$(node -p "require('./package.json').version") .
       - run: npm run test:consumer-companion
-      - run: npx playwright install --with-deps chromium
       - run: npm run docs:test
+      - run: npm run test:local-browser
+      - run: GA_BROWSER=firefox npm run test:local-browser
+      - run: GA_BROWSER=webkit npm run test:local-browser
+      - run: node tools/docs/tests/grabm-parity.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: genetic-assembly-packages

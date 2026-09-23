@@ -1,7 +1,9 @@
+import {mapMeasurements, repairDesign} from "../model.js";
+import type { ReplayDataset } from "../model.js";
 import { createHash } from "node:crypto";
 import { createInterface } from "node:readline";
-import { mkdir, readdir, readFile, rm } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { join, relative, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import {
   StudyClient,
@@ -29,6 +31,7 @@ export type {
   Measurement,
 } from "../contracts.js";
 export interface EvaluationContext {
+  retainDataset(dataset: ReplayDataset): void;
   seed: number;
   phase: EvaluationRecord["phase"];
   signal: AbortSignal;
@@ -64,26 +67,11 @@ export function defineStudy(model: StudyModel): StudyModel {
 export const hash = (value: unknown) =>
   createHash("sha256").update(canonical(value)).digest("hex");
 function constraintValues(spec: StudySpec, metrics: Record<string, number>) {
-  return Object.fromEntries(
-    Object.entries(spec.constraints).map(([id, c]) => {
-      const value = metrics[c.metric];
-      if (!Number.isFinite(value))
-        throw Error(
-          `Constraint ${id}: metric ${c.metric} is missing or non-finite`,
-        );
-      return [id, c.operator === "<=" ? value - c.bound : c.bound - value];
-    }),
-  );
+  const {domain_validity: _, ...values} = mapMeasurements(spec, {metrics}).constraints;
+  return values;
 }
 function objectiveValues(spec: StudySpec, metrics: Record<string, number>) {
-  return Object.entries(spec.objectives).map(([id, o]) => {
-    const value = metrics[o.metric];
-    if (!Number.isFinite(value))
-      throw Error(
-        `Objective ${id}: metric ${o.metric} is missing or non-finite`,
-      );
-    return value;
-  });
+  return mapMeasurements(spec, {metrics}).objectives;
 }
 /** Exercise the configured baseline, repair and goal mapping twice without a backend. */
 export async function checkStudy(model: StudyModel) {
@@ -117,6 +105,7 @@ export async function checkStudy(model: StudyModel) {
           signal: AbortSignal.timeout(120000),
           directory,
           retainReplay: false,
+          retainDataset() { throw Error("Replay retention was not requested"); },
         }),
       );
       objectiveValues(spec, measurement.metrics);
@@ -200,13 +189,8 @@ export async function serveStudy(model: StudyModel): Promise<void> {
     raw: Decisions,
     phase: EvaluationRecord["phase"],
   ) {
-    const repaired = model.repair?.(
-      structuredClone(raw),
-      structuredClone(spec.inputs),
-    ) ?? { decisions: raw, repairs: [] };
-    encodeDecisions(spec, repaired.decisions);
-    const invalid =
-      model.validate?.(repaired.decisions, structuredClone(spec.inputs)) ?? [];
+    const repaired = repairDesign(model, spec, raw);
+    const invalid = repaired.invalid;
     const seeds =
       phase === "validation" ? spec.validationSeeds : spec.searchSeeds;
     const measurements: Record<string, number>[] = [];
@@ -234,7 +218,9 @@ export async function serveStudy(model: StudyModel): Promise<void> {
       const directory = join(tmpdir(), "ga-evaluation-" + record.id);
       await mkdir(directory, { recursive: true });
       const start = performance.now();
+      let retained: ReplayDataset | undefined;
       const context: EvaluationContext = {
+        retainDataset(dataset) { if (phase !== "baseline" && phase !== "replay") throw Error("Replay retention was not requested"); if (retained) throw Error("Only one dataset per evaluation is supported"); retained = structuredClone(dataset); },
         seed,
         phase,
         signal: AbortSignal.timeout(120000),
@@ -267,6 +253,15 @@ export async function serveStudy(model: StudyModel): Promise<void> {
             ...constraintValues(spec, record.metrics),
             domain_validity: 0,
           };
+          if (context.retainReplay && retained) {
+            for (const [key, bytes] of Object.entries(retained.resources)) {
+              if (!key || key.startsWith('/') || key.includes('\\') || key.split('/').some(part => !part || part === '..')) throw Error('Unsafe replay resource path');
+              const path = join(directory, key);
+              await mkdir(dirname(path), {recursive: true});
+              await writeFile(path, bytes);
+            }
+            record.datasetId = await uploadDataset(client, {...retained, directory}, record);
+          }
           if (context.retainReplay && model.dataset) {
             const reference = await model.dataset(context);
             if (reference)

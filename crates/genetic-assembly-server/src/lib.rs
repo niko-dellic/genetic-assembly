@@ -8,35 +8,29 @@ use crate::error::ApiError;
 use crate::models::*;
 use crate::storage::{ArtifactStore, UnifiedArtifactStore};
 use axum::body::{Body, Bytes};
-use axum::extract::{DefaultBodyLimit, Multipart, Path, State};
+use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{HeaderMap, Request, StatusCode, header};
 use axum::middleware::{self, Next};
-use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use futures::{StreamExt, stream};
 use genetic_assembly_adapter::{
     ADAPTER_PROTOCOL_VERSION, AdapterLaunch, PROBLEM_SCHEMA_VERSION, ProblemBundle,
 };
 use genetic_assembly_core::{ProblemSpec, validate_problem_config};
-use genetic_assembly_scene::{SceneGeometry, SceneManifest};
-use genetic_assembly_script::{
-    EvaluatorManifest, validate_evaluator_manifest, validate_evaluator_source,
-};
+use genetic_assembly_scene::SceneManifest;
+use genetic_assembly_script::EvaluatorManifest;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{FromRow, PgPool};
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::net::TcpListener;
 use tokio::sync::{RwLock, broadcast};
-use tokio_stream::wrappers::BroadcastStream;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::info;
@@ -133,18 +127,6 @@ pub fn router(state: Arc<AppState>) -> Router {
                 }))
             }),
         )
-        .route("/v1/scenes", post(create_scene))
-        .route("/v1/evaluators", post(create_evaluator))
-        .route("/v1/artifacts", post(create_artifact))
-        .route("/v1/artifacts/{id}", get(get_artifact))
-        .route("/v1/problems", post(create_problem))
-        .route("/v1/adapters", post(create_adapter))
-        .route("/v1/runs", post(create_run))
-        .route("/v1/runs/{id}", get(get_run))
-        .route("/v1/runs/{id}/events", get(run_events))
-        .route("/v1/runs/{id}/results", get(run_results))
-        .route("/v1/runs/{id}/analytics", get(run_analytics))
-        .route("/v1/runs/{id}/cancel", post(cancel_run))
         .merge(studies::routes())
         .layer(DefaultBodyLimit::max(256 * 1024 * 1024))
         .layer(CorsLayer::permissive())
@@ -405,123 +387,6 @@ async fn authorize(
     } else {
         Err(StatusCode::UNAUTHORIZED)
     }
-}
-
-async fn create_scene(
-    State(state): State<Arc<AppState>>,
-    mut multipart: Multipart,
-) -> Result<Json<RevisionResponse>, ApiError> {
-    let mut glb = None;
-    let mut manifest_bytes = None;
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|error| ApiError::BadRequest(error.to_string()))?
-    {
-        match field.name() {
-            Some("glb") => {
-                glb = Some(
-                    field
-                        .bytes()
-                        .await
-                        .map_err(|error| ApiError::BadRequest(error.to_string()))?
-                        .to_vec(),
-                )
-            }
-            Some("manifest") => {
-                manifest_bytes = Some(
-                    field
-                        .bytes()
-                        .await
-                        .map_err(|error| ApiError::BadRequest(error.to_string()))?
-                        .to_vec(),
-                )
-            }
-            _ => {}
-        }
-    }
-    let glb =
-        glb.ok_or_else(|| ApiError::BadRequest("multipart field `glb` is required".into()))?;
-    let manifest_bytes = manifest_bytes
-        .ok_or_else(|| ApiError::BadRequest("multipart field `manifest` is required".into()))?;
-    let manifest: SceneManifest = serde_json::from_slice(&manifest_bytes)
-        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
-    let scene = SceneGeometry::from_glb(&glb, manifest.clone())
-        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
-    let mut digest = Sha256::new();
-    digest.update(&glb);
-    digest.update(&manifest_bytes);
-    let hash = hex::encode(digest.finalize());
-    if let Some((id, artifact_key)) = sqlx::query_as::<_, (Uuid, String)>(
-        "SELECT id,artifact_key FROM scene_revisions WHERE content_hash=$1",
-    )
-    .bind(&hash)
-    .fetch_optional(&state.db)
-    .await?
-    {
-        // A content hash can outlive local/S3 artifact storage (for example
-        // after a development volume is recreated). Re-uploading the same
-        // content-addressed key is idempotent and repairs that split state.
-        state.artifacts.put(&artifact_key, glb).await?;
-        return Ok(Json(RevisionResponse {
-            id,
-            content_hash: hash,
-        }));
-    }
-    let id = Uuid::new_v4();
-    let artifact_key = format!("scenes/{hash}.glb");
-    state.artifacts.put(&artifact_key, glb).await?;
-    sqlx::query("INSERT INTO scene_revisions(id,content_hash,manifest,artifact_key,object_count,mesh_count) VALUES($1,$2,$3,$4,$5,$6)")
-        .bind(id).bind(&hash).bind(serde_json::to_value(manifest).map_err(|e| ApiError::Internal(e.to_string()))?)
-        .bind(&artifact_key).bind(scene.object_count() as i32).bind(scene.mesh_count() as i32)
-        .execute(&state.db).await?;
-    Ok(Json(RevisionResponse {
-        id,
-        content_hash: hash,
-    }))
-}
-
-async fn create_evaluator(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<CreateEvaluatorRequest>,
-) -> Result<Json<RevisionResponse>, ApiError> {
-    validate_evaluator_source(&request.source, &request.limits)
-        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
-    validate_evaluator_manifest(&request.manifest)
-        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
-    let manifest = serde_json::to_vec(&request.manifest)
-        .map_err(|error| ApiError::Internal(error.to_string()))?;
-    let limits = serde_json::to_vec(&request.limits)
-        .map_err(|error| ApiError::Internal(error.to_string()))?;
-    let mut digest = Sha256::new();
-    digest.update(request.source.as_bytes());
-    digest.update(&manifest);
-    digest.update(&limits);
-    let hash = hex::encode(digest.finalize());
-    if let Some(id) =
-        sqlx::query_scalar::<_, Uuid>("SELECT id FROM evaluator_revisions WHERE source_hash=$1")
-            .bind(&hash)
-            .fetch_optional(&state.db)
-            .await?
-    {
-        return Ok(Json(RevisionResponse {
-            id,
-            content_hash: hash,
-        }));
-    }
-    let id = Uuid::new_v4();
-    sqlx::query("INSERT INTO evaluator_revisions(id,source_hash,source,manifest,limits) VALUES($1,$2,$3,$4,$5)")
-    .bind(id)
-    .bind(&hash)
-    .bind(request.source)
-    .bind(serde_json::to_value(request.manifest).map_err(|e| ApiError::Internal(e.to_string()))?)
-    .bind(serde_json::to_value(request.limits).map_err(|e| ApiError::Internal(e.to_string()))?)
-    .execute(&state.db)
-    .await?;
-    Ok(Json(RevisionResponse {
-        id,
-        content_hash: hash,
-    }))
 }
 
 async fn create_run(
@@ -881,59 +746,6 @@ async fn run_generic_analytics(
     }))
 }
 
-async fn run_events(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, ApiError> {
-    let status = fetch_run(&state.db, id).await?;
-    let persisted = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT event FROM run_events WHERE run_id=$1 ORDER BY sequence",
-    )
-    .bind(id)
-    .fetch_all(&state.db)
-    .await?
-    .into_iter()
-    .map(|event| {
-        serde_json::from_value(event).map_err(|error| ApiError::Internal(error.to_string()))
-    })
-    .collect::<Result<Vec<RunEvent>, ApiError>>()?;
-    let receiver = state.event_sender(id).await.subscribe();
-    let initial_events = if persisted.is_empty() {
-        let mut fallback = vec![RunEvent::Status {
-            run_id: id,
-            status: status.status,
-        }];
-        if let Some(summary) = sqlx::query_scalar::<_, serde_json::Value>(
-            "SELECT summary FROM generation_summaries WHERE run_id=$1 ORDER BY generation DESC LIMIT 1",
-        )
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await?
-        {
-            fallback.push(RunEvent::Generation {
-                run_id: id,
-                summary: serde_json::from_value(summary)
-                    .map_err(|error| ApiError::Internal(error.to_string()))?,
-            });
-        }
-        fallback
-    } else {
-        persisted
-    };
-    let initial = stream::iter(
-        initial_events
-            .into_iter()
-            .map(|event| Ok::<_, Infallible>(sse_event(&event))),
-    );
-    let live = BroadcastStream::new(receiver).filter_map(|event| async move {
-        match event {
-            Ok(event) => Some(Ok::<_, Infallible>(sse_event(&event))),
-            Err(_) => None,
-        }
-    });
-    Ok(Sse::new(initial.chain(live)).keep_alive(KeepAlive::default()))
-}
-
 pub(crate) async fn emit_event(state: &AppState, event: RunEvent) -> Result<(), ApiError> {
     let run_id = event.run_id();
     sqlx::query("INSERT INTO run_events(run_id,event) VALUES($1,$2)")
@@ -943,18 +755,4 @@ pub(crate) async fn emit_event(state: &AppState, event: RunEvent) -> Result<(), 
         .await?;
     let _ = state.event_sender(run_id).await.send(event);
     Ok(())
-}
-
-fn sse_event(event: &RunEvent) -> Event {
-    let id = match event {
-        RunEvent::Status { status, .. } => format!("status-{status}"),
-        RunEvent::Generation { summary, .. } => format!("generation-{}", summary.generation),
-        RunEvent::Checkpoint { generation, .. } => format!("checkpoint-{generation}"),
-        RunEvent::Completed { .. } => "completed".into(),
-        RunEvent::Failed { .. } => "failed".into(),
-    };
-    Event::default()
-        .id(id)
-        .event("run")
-        .data(serde_json::to_string(event).expect("event serializes"))
 }

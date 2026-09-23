@@ -1,3 +1,5 @@
+import type {InspectorProvider} from "./providers.js";
+export {ArchiveInspectorProvider, LocalInspectorProvider, type InspectorProvider} from "./providers.js";
 import {
   StudyClient,
   type PreparedStudy,
@@ -5,6 +7,7 @@ import {
   type Decisions,
 } from "@genetic-assembly/sdk";
 export interface InspectorOptions {
+  provider?: InspectorProvider;
   baseUrl?: string;
   token?: string;
   onPreview?: (decisions: Decisions, study: PreparedStudy) => void;
@@ -16,7 +19,7 @@ export function mountInspector(
   container: HTMLElement,
   options: InspectorOptions = {},
 ) {
-  const api = new StudyClient(
+  const api: InspectorProvider = options.provider ?? new StudyClient(
     options.baseUrl ?? location.origin,
     options.token,
   );
@@ -38,6 +41,7 @@ export function mountInspector(
   function button(label: string, action: () => unknown) {
     const element = document.createElement("button");
     element.textContent = label;
+    if (label === "Open replay" && api.resourceFetch && !options.onReplay) { element.disabled = true; element.title = "Provide an application replay viewer through onReplay"; }
     element.onclick = () => {
       Promise.resolve().then(action).catch(error);
     };
@@ -139,6 +143,17 @@ export function mountInspector(
       a.href = api.datasetUrl(dataset.id) + dataset.manifestKey;
       a.textContent = "Open dataset manifest";
       a.target = "_blank";
+      if (api.resourceFetch) {
+        a.textContent = "Download dataset manifest";
+        a.onclick = event => {
+          event.preventDefault();
+          api.resourceFetch!(a.href).then(response => response.blob()).then(blob => {
+            const url = URL.createObjectURL(blob), download = document.createElement("a");
+            download.href = url; download.download = "manifest.json"; download.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }).catch(error);
+        };
+      }
       p.append(a);
       p.append(
         button("Open replay", async () => {
@@ -146,6 +161,7 @@ export function mountInspector(
           replayView?.dispose();
           const viewer = document.createElement("div");
           target.append(viewer);
+          if (api.resourceFetch) throw Error("Provide onReplay to open this dataset with your application’s replay viewer.");
           const module = await import(
             /* @vite-ignore */ api.baseUrl + "/grabm.js"
           );
@@ -157,7 +173,7 @@ export function mountInspector(
               const headers = new Headers(init.headers);
               if (options.token)
                 headers.set("authorization", `Bearer ${options.token}`);
-              return fetch(input, { ...init, headers });
+              return (api.resourceFetch ?? fetch)(input, { ...init, headers });
             },
           );
         }),
@@ -433,6 +449,10 @@ export function mountInspector(
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
+  if (api.readOnly) for (const selector of ["[data-baseline]", "[data-run]", "[data-replay]", "[data-cancel]"]) {
+    find<HTMLButtonElement>(selector).disabled = true;
+    find(selector).title = "Read-only archive: original model required";
+  }
   loadStudies().catch(error);
   return {
     refresh: loadStudies,
@@ -444,3 +464,4 @@ export function mountInspector(
     },
   };
 }
+export {openArchive} from '@genetic-assembly/sdk';

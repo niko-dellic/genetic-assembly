@@ -10,14 +10,6 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct CreateEvaluatorRequest {
-    pub source: String,
-    pub manifest: EvaluatorManifest,
-    #[serde(default)]
-    pub limits: ScriptLimits,
-}
-
-#[derive(Clone, Debug, Deserialize)]
 pub struct CreateRunRequest {
     #[serde(default)]
     pub scene_revision_id: Option<Uuid>,

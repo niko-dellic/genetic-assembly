@@ -6,4 +6,4 @@ Create a renderer, call `update({ dataset, selection })`, call `resize()` when t
 
 See the [visualization guide](https://github.com/niko-dellic/genetic-assembly/blob/main/docs/visualizations.md).
 
-Registry publication is deferred. Build local tarballs with `npm run pack` from the source checkout. See the [installation guide](https://genetic-assembly-docs.vercel.app/installation.html).
+Registry publication is deferred. Build local tarballs with `npm run pack` from the source checkout. See the [installation guide](https://genetic-assembly.vercel.app/docs/installation.html).

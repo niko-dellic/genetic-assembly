@@ -23,3 +23,11 @@ Build the local companion image, then run `npm run test:consumer-companion`. Thi
 Tag pushes verify and retain tarballs without publishing. A future coordinated release requires an explicit workflow dispatch with `publish` enabled on a matching version tag and registry credentials.
 
 The docs pin Rollup to 4.62.2 for consistent Linux and macOS installations. Revalidate clean installs and production builds when updating this override.
+
+## Website routes
+
+The brief library introduction lives at `https://genetic-assembly.vercel.app/`. The full guide begins at `/docs/`; VitePress rewrites authored pages and generated references into this section. `docs/overview.md` becomes `/docs/index.html`, while `docs/index.md` stays the homepage. Public documentation downloads belong in `docs/public/docs/`. The old documentation domain permanently redirects to the new docs section.
+
+## Publish static documentation
+
+`npm run docs:deploy` builds the site and validates a separate public-only deployment directory before publishing it to the configured Vercel project. It resolves source paths relative to the script, so the calling directory cannot change the payload. Missing pages, hidden files and symlinks stop publication. Use `node tools/docs/deploy-static.mjs --prepare-only` to inspect the staged output without publishing.

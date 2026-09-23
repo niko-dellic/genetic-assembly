@@ -366,8 +366,8 @@ async fn validated(s: &AppState, id: Uuid) -> Result<Value, ApiError> {
     let dominates = |a: &Validated, b: &Validated| {
         let va = violation(a);
         let vb = violation(b);
-        if va != vb {
-            return va < vb;
+        if va > 0.0 || vb > 0.0 {
+            return va + 1e-12 < vb;
         }
         let mut better = false;
         for o in objectives.values() {
@@ -379,10 +379,10 @@ async fn validated(s: &AppState, id: Uuid) -> Result<Value, ApiError> {
             };
             let x = a.metrics[key].as_f64().unwrap() * sign;
             let y = b.metrics[key].as_f64().unwrap() * sign;
-            if x > y {
+            if x > y + 1e-12 {
                 return false;
             }
-            if x < y {
+            if x + 1e-12 < y {
                 better = true;
             }
         }

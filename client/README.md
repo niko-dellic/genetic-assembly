@@ -1,20 +1,13 @@
 # @genetic-assembly/three
 
-Three.js integration for the Genetic Assembly local NSGA-II companion.
+Optional scene export and explicit candidate previews for study-based optimization.
 
-```bash
-npm install /path/to/genetic-assembly/artifacts/genetic-assembly-three-0.3.0.tgz three
+```sh
+npm install /path/to/artifacts/genetic-assembly-three-0.4.0.tgz three
 ```
 
-The package provides:
+Use `@genetic-assembly/sdk` to define and run a study. `previewDecisions(scene, decisions, bindings)` maps its named decisions to scene properties and returns a `CandidatePreview` with `revert()`. Nothing applies a design to your application automatically.
 
-- `exportScene` for validated binary GLB export.
-- `GeneticAssemblyClient` for scene, evaluator, run, SSE, result, and analytics APIs.
-- `CandidatePreview` for applying and reverting returned scene patches.
-- Typed scene manifests, levers, objectives, constraints, and results.
+`exportScene` produces a GLB artifact. Referenced objects need stable, unique `userData.gaId` values. Bindings support transforms, visibility, numeric material properties and numeric user data.
 
-Every referenced object needs a stable unique `userData.gaId`. V1 supports static transform, visibility, numeric material, and numeric `userData` levers.
-
-See the [Three.js integration section](https://github.com/niko-dellic/genetic-assembly/blob/main/docs/integrating-another-repository.md#12-threejs-projects).
-
-Registry publication is deferred. Build local tarballs with `npm run pack` from the source checkout. See the [installation guide](https://genetic-assembly-docs.vercel.app/installation.html).
+The former scene-upload HTTP client has been removed. [Three.js guide](https://genetic-assembly.vercel.app/docs/three.html). npm publication remains deferred.

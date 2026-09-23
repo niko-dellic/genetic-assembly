@@ -4,5 +4,30 @@
   "installCommand": "npm ci && npm run setup",
   "buildCommand": "npm run docs:build",
   "outputDirectory": "docs/dist",
-  "cleanUrls": false
+  "cleanUrls": false,
+  "redirects": [
+    {
+      "source": "/docs/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "genetic-assembly-docs.vercel.app"
+        }
+      ],
+      "destination": "https://genetic-assembly.vercel.app/docs/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "genetic-assembly-docs.vercel.app"
+        }
+      ],
+      "destination": "https://genetic-assembly.vercel.app/docs/:path*",
+      "permanent": true
+    }
+  ],
+  "trailingSlash": true
 }

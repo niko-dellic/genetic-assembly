@@ -192,13 +192,20 @@ fn polynomial_mutation(value: f64, lower: f64, upper: f64, eta: f64, rng: &mut C
 
 fn quantize_integer(value: f64, lower: i64, upper: i64, step: u64) -> f64 {
     let slot = ((value - lower as f64) / step as f64).round().max(0.0) as u128;
-    let quantized = lower as i128 + slot.saturating_mul(step as u128) as i128;
+    let max_slot = ((upper as i128 - lower as i128) / step as i128) as u128;
+    let quantized = lower as i128 + slot.min(max_slot).saturating_mul(step as u128) as i128;
     quantized.clamp(lower as i128, upper as i128) as f64
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integer_upper_bound_does_not_create_an_off_step_value() {
+        assert_eq!(quantize_integer(10.0, 0, 10, 3), 9.0);
+        assert_eq!(quantize_integer(-1.0, -10, -1, 4), -2.0);
+    }
     use rand::SeedableRng;
 
     #[test]

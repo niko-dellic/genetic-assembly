@@ -1,29 +1,37 @@
 import { defineConfig } from 'vitepress'
 import { fileURLToPath } from 'node:url'
 import { syntaxTheme } from './syntax-theme'
-const group = (text: string, items: [string, string][]) => ({ text, items: items.map(([text, link]) => ({ text, link })) })
+const group = (text: string, items: [string, string][]) => ({ text, items: items.map(([text, link]) => ({ text, link: link === '/' ? '/docs/' : `/docs${link}` })) })
 export default defineConfig({
   title: 'Genetic Assembly', description: 'Optimization for your application. Setup, integration guides, and complete public API reference.',
-  base: process.env.DOCS_BASE ?? '/', cleanUrls: false, outDir: 'dist', lastUpdated: true,
+  base: '/',
+  rewrites: (id) => id === 'index.md' ? id : id === 'overview.md' ? 'docs/index.md' : `docs/${id}`, cleanUrls: false, outDir: 'dist', lastUpdated: true,
   markdown: { theme: syntaxTheme },
   vite: {
     server: { host: '127.0.0.1', port: 4176, strictPort: true },
-    resolve: { alias: { '@genetic-assembly/visualizations': fileURLToPath(new URL('../../visualizations/dist/index.js', import.meta.url)) } }
+    worker: { format: 'es' },
+    resolve: { alias: { '@genetic-assembly/sdk': fileURLToPath(new URL('../../sdk/dist/index.js', import.meta.url)), '@genetic-assembly/grabm': fileURLToPath(new URL('../../grabm-integration/dist/index.js', import.meta.url)), '@genetic-assembly/visualizations': fileURLToPath(new URL('../../visualizations/dist/index.js', import.meta.url)) } }
   },
   themeConfig: {
-    nav: [{ text: 'Guide', link: '/' }, { text: 'API', link: '/api-reference/' }, { text: 'Examples', link: '/examples' }],
+    nav: [{ text: 'Home', link: '/' }, { text: 'Docs', link: '/docs/' }, { text: 'API', link: '/docs/api-reference/' }, { text: 'Examples', link: '/docs/examples' }],
     search: { provider: 'local' }, outline: [2, 3],
     socialLinks: [{ icon: 'github', link: 'https://github.com/niko-dellic/genetic-assembly' }],
-    sidebar: [
-      group('Start here', [['Overview', '/'], ['Installation', '/installation'], ['First baseline and run', '/quickstart']]),
+    sidebar: { '/docs/': [
+      group('Start here', [['Overview', '/'], ['Installation', '/installation'], ['First baseline and run', '/quickstart'], ['Local execution', '/local']]),
       group('Foundations', [['Core concepts', '/concepts'], ['Author a study', '/integrating-another-repository'], ['Backend setup', '/backend'], ['Goals and seeds', '/goals'], ['Run lifecycle', '/runs'], ['Compare results', '/results'], ['Replay and storage', '/replay']]),
-      group('Integrations', [['grabm neighborhood', '/grabm'], ['Python', '/python'], ['Three.js', '/three'], ['Visualizations', '/visualizations'], ['Recorded examples', '/examples'], ['Deployment', '/deployment']]),
+      group('Integrations', [['grabm neighborhood', '/grabm'], ['Live browser study', '/live-neighborhood'], ['Python', '/python'], ['Three.js', '/three'], ['Visualizations', '/visualizations'], ['Recorded examples', '/examples'], ['Deployment', '/deployment']]),
       group('Library exports', [['All functions', '/api-reference/functions'], ['Study SDK', '/api-reference/sdk/'], ['Node model helpers', '/api-reference/node/'], ['grabm integration', '/api-reference/grabm/'], ['Inspector', '/api-reference/inspector/'], ['Three.js integration', '/api-reference/three/'], ['Visualization exports', '/api-reference/visualizations/']]),
       group('Reference', [['CLI commands', '/cli'], ['JSON schemas', '/schemas'], ['HTTP API', '/http-api'], ['Adapter protocol', '/adapter-protocol'], ['Evaluator context', '/evaluator-context'], ['Usage guide', '/usage-guide'], ['Troubleshooting', '/troubleshooting'], ['Maintaining the docs', '/contributing']]),
-    ],
+    ] },
     footer: { message: 'Genetic Assembly · Deterministic NSGA-II optimization', copyright: 'MIT licensed' }
   },
-  head: [['script', {}, `(() => {
+  head: [
+    ['link', { rel: 'icon', href: '/favicon.ico', sizes: 'any' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16x16.png' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' }],
+    ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' }],
+    ['link', { rel: 'manifest', href: '/site.webmanifest' }],
+    ['script', {}, `(() => {
     const root = document.documentElement;
     const restore = value => root.dataset.palette = ['neutral','green','blue','violet'].includes(value) ? value : 'neutral';
     try { restore(localStorage.getItem('genetic-assembly-palette')); } catch { restore(null); }

@@ -23,7 +23,7 @@ The runtime snapshots declared files, the package manifest, the lockfile, and lo
 - `ga backup ./backup`: export database metadata, artifact bytes and runtime snapshots together.
 - `ga cleanup --delete-data`: explicitly remove this project's new data volumes.
 
-Compose uses project name `ga-<project>-v2`, with `database`, `artifacts`, and `ga-<project>-snapshots-v2` volumes. Version 0.3 does not delete previous development data. Stop the old services, inspect their volumes and retain a backup before disposing of them yourself.
+Compose uses project name `ga-<project>-v4`, with `database`, `artifacts`, and `ga-<project>-snapshots-v4` volumes. Version 0.4 does not delete previous development data. Stop the old services, inspect their volumes and retain a backup before disposing of them yourself.
 
 ## Existing companion and custom runtime
 
