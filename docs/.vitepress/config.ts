@@ -38,6 +38,7 @@ export default defineConfig({
     },
   },
   themeConfig: {
+    logo: { src: "/android-chrome-192x192.png", alt: "", width: 24, height: 24 },
     nav: [
       { text: "Home", link: "/" },
       { text: "Docs", link: "/docs/" },
@@ -138,7 +139,7 @@ export default defineConfig({
     const restore = value => root.dataset.palette = ['neutral','green','blue','violet'].includes(value) ? value : 'neutral';
     try { restore(localStorage.getItem('genetic-assembly-palette')); } catch { restore(null); }
     window.addEventListener('storage', event => { if(event.key === 'genetic-assembly-palette' || event.key === null) restore(event.newValue); });
-    const sync = () => { const theme = root.classList.contains('dark') ? 'dark' : 'light'; root.dataset.theme = theme; root.style.colorScheme = theme; document.dispatchEvent(new CustomEvent('genetic-assembly:themechange', {detail:{theme,palette:root.dataset.palette}})); };
+    const sync = () => { const theme = root.classList.contains('dark') ? 'dark' : 'light'; root.dataset.theme = theme; document.dispatchEvent(new CustomEvent('genetic-assembly:themechange', {detail:{theme,palette:root.dataset.palette}})); };
     new MutationObserver(sync).observe(root, {attributes:true,attributeFilter:['class','data-palette']}); sync();
   })();`,
     ],

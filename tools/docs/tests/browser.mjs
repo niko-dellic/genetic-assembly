@@ -42,6 +42,43 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   const url =
     process.env.DOCS_TEST_URL ?? `http://127.0.0.1:${server.address().port}`;
+  // Shared navigation must not jump when a documentation sidebar appears.
+  for (const width of [390, 960, 1280, 1600]) {
+    await page.setViewportSize({ width, height: 900 });
+    let homeLayout;
+    for (const path of ["/", "/docs/", "/docs/api-reference/", "/docs/examples.html"]) {
+      await page.goto(url + path);
+      await hydrated();
+      await page.evaluate(() => document.fonts.ready);
+      const layout = await page.evaluate(() => {
+        const selectors = [".VPNavBarTitle", ".VPNavBarSearch", ".VPNavBarMenu", ".VPNavBarAppearance", ".VPNavBar .docs-theme-picker"];
+        return selectors.map(selector => {
+          const element = document.querySelector(selector);
+          if (!element || !element.getClientRects().length) return null;
+          const { x, y, width, height } = element.getBoundingClientRect();
+          return { x, y, width, height };
+        });
+      });
+      if (!homeLayout) homeLayout = layout;
+      else layout.forEach((box, index) => {
+        assert.equal(Boolean(box), Boolean(homeLayout[index]), `Navbar visibility at ${width}px ${path}`);
+        if (box) for (const key of ["x", "y", "width", "height"])
+          assert(Math.abs(box[key] - homeLayout[index][key]) < 1, `Navbar ${index} ${key} moved at ${width}px ${path}: ${homeLayout[index][key]} -> ${box[key]}`);
+      });
+      const navbarColor = await page.locator(".VPNavBar").evaluate(element => getComputedStyle(element).backgroundColor);
+      assert.notEqual(navbarColor, "rgba(0, 0, 0, 0)", `Transparent navbar exposes sidebar at ${width}px ${path}`);
+      if (width >= 960 && await page.locator(".VPSidebar").count()) {
+        const sidebar = await page.locator(".VPSidebar").boundingBox();
+        const navbar = await page.locator(".VPNavBar").boundingBox();
+        assert(sidebar.y >= navbar.y + navbar.height, "Sidebar background extends behind navbar title");
+      }
+      const logo = page.locator(".VPNavBarTitle img.logo");
+      await logo.waitFor();
+      assert(await logo.evaluate(image => image.complete && image.naturalWidth > 0), "Missing navbar icon");
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `Horizontal overflow at ${width}px ${path}`);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto(url);
   await hydrated();
   await page.locator("h1").filter({ hasText: "Genetic Assembly" }).waitFor();
@@ -65,6 +102,33 @@ try {
     await page.locator("html").getAttribute("data-palette"),
     "violet",
   );
+  // Theme colors must settle in the same frame, without delayed navbar/search fades.
+  for (const path of ["/", "/docs/"]) {
+    await page.goto(url + path);
+    await hydrated();
+    for (const palette of ["neutral", "green", "blue", "violet"]) {
+      await page.getByLabel("Color palette").first().selectOption(palette);
+      await page.waitForTimeout(550);
+      for (let direction = 0; direction < 2; direction++) {
+        const frames = await page.evaluate(async () => {
+          const selectors = ["body", ".VPNavBar", ".VPNavBar .content-body", ".DocSearch-Button", ".DocSearch-Button-Placeholder", ".DocSearch-Button-Key"];
+          document.querySelector('.VPNavBar [role="switch"]').click();
+          const frames = [];
+          for (let i = 0; i < 24; i++) {
+            await new Promise(requestAnimationFrame);
+            frames.push(selectors.map(selector => {
+              const element = document.querySelector(selector);
+              if (!element) throw Error(`Missing theme surface: ${selector}`);
+              const style = getComputedStyle(element);
+              return [style.backgroundColor, style.color, style.borderColor];
+            }));
+          }
+          return frames;
+        });
+        for (const frame of frames) assert.deepEqual(frame, frames.at(-1), `Theme colors lagged or flickered on ${path} (${palette}, toggle ${direction})`);
+      }
+    }
+  }
   await page.getByRole("switch").click();
   await page
     .getByRole("button", { name: /Search/ })

@@ -85,3 +85,50 @@ textarea {
 .vp-doc [class*='language-'] > button.copy.copied::after {
   mask-image: var(--vp-icon-copied);
 }
+
+/* Keep the viewport width stable between short and scrolling pages. */
+html {
+  scrollbar-gutter: stable;
+}
+
+.VPNavBarTitle .logo {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+/* Sidebar pages share the homepage's normal-flow navbar layout. */
+@media (min-width: 960px) {
+  /* Keep the sidebar surface below the navbar, including its sticky curtain. */
+  .Layout aside.VPSidebar {
+    top: calc(var(--vp-layout-top-height, 0px) + var(--vp-nav-height));
+    padding-top: 0;
+  }
+  .Layout .VPSidebar .curtain {
+    display: none;
+  }
+  .VPNav .VPNavBar.has-sidebar .wrapper {
+    padding: 0 32px;
+  }
+  .VPNav .VPNavBar.has-sidebar .container {
+    max-width: calc(var(--vp-layout-max-width) - 64px);
+  }
+  .VPNav .VPNavBar.has-sidebar .container > .title {
+    position: static;
+    padding: 0;
+    width: auto;
+    height: calc(var(--vp-nav-height) - 1px);
+  }
+  .VPNav .VPNavBar.has-sidebar .content {
+    padding: 0;
+  }
+  .VPNav .VPNavBar.has-sidebar .divider {
+    padding-left: 0;
+  }
+  .VPNav .VPNavBarTitle.has-sidebar .title {
+    border-bottom-color: transparent;
+  }
+  .VPNav .VPNavBar.has-sidebar {
+    background-color: var(--vp-nav-bg-color);
+  }
+}
