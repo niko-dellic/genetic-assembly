@@ -186,9 +186,9 @@ export async function runConformanceSuite(
   validateCapabilities(adapter, capabilities);
   const requests = [
     { id: 1, genes: problem.problem.variables.map((variable) =>
-      variable.kind === "binary" ? 0 : variable.lower) },
+      variable.kind === "binary" || variable.kind === "categorical" ? 0 : variable.lower) },
     { id: 2, genes: problem.problem.variables.map((variable) =>
-      variable.kind === "binary" ? 1 : variable.upper) },
+      variable.kind === "binary" ? 1 : variable.kind === "categorical" ? variable.choices - 1 : variable.upper) },
   ];
   const first = await adapter.evaluateBatch(requests, "conformance");
   const second = await adapter.evaluateBatch(requests, "conformance");

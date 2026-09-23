@@ -1,21 +1,11 @@
-# Run lifecycle
+# Run experiments
 
-## Register immutable inputs
+Prepare a study with `ga up`, then run `ga baseline` before optimization. Use `ga run --population 24 --generations 8 --seed 42`, or call `StudyClient.run(studyId, config)`.
 
-Upload artifacts, then create a problem and an adapter revision. Store their returned IDs with your experiment configuration. A Three.js run instead references scene and evaluator revisions. Supply exactly one revision pair to the run API.
+Runs transition through queued, running, completed, failed or cancelled. A run handle observes status with `progress()`, waits with `wait()`, cancels with `cancel()`, retrieves per-seed `history()`, and exports results. Aborting a progress observer only stops observation; call `cancel()` to stop computation.
 
-## Start and observe
+Seed-level records are persisted before each adapter batch response. Retried candidate/phase/seed identities update the same record. Successful measurement reuse is scoped to the immutable runtime and study definition. Solver checkpoints preserve supported restart recovery; already stored measurements remain queryable after failure or cancellation.
 
-`CompanionClient.startRun(problemId, adapterId, config)` returns a run ID. Status progresses through `queued`, `running`, then `completed`, `failed`, or `cancelled`. Poll `getRun(id)` or await `subscribe(id, callback, signal)` for SSE progress.
+Keep the database, artifact storage and snapshot volume together across restarts. A missing runtime directory is an actionable run failure; restoring only the database cannot recreate executable code or replay bytes.
 
-The clients reconnect using the last event ID and stop at terminal events. Aborting the subscription only stops observation; use `cancel(id)` to stop the optimization. Always inspect final status before treating results as a successful run.
-
-## Cancellation and failures
-
-Cancellation is cooperative at evaluation boundaries. An adapter can take time to respond; configure its timeout and retry limit. Inspect `RunStatus.error` on failure. API errors expose the HTTP status and response body. Do not assume a timed-out request was never accepted; inspect known run IDs before resubmitting.
-
-## Recovery and storage
-
-Postgres stores metadata, leases, and progress. Versioned compressed checkpoints support restart recovery with compatible problem, adapter, and solver inputs. Keep artifact storage with the database when moving a deployment. Do not remove Docker volumes unless you intend to discard stored runs.
-
-The companion executes one active run at a time. External adapters manage their own concurrency; declaring `max_concurrency` does not create workers automatically.
+Validation reevaluates finalists with separate seeds. `results().search` retains the original search front; `results().validated` is computed separately from fully measured validation candidates. Validation can change feasibility and dominance. Never present validation scores as though they were the original search measurements.

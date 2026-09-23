@@ -1,6 +1,6 @@
 {
   "name": "@genetic-assembly/adapter-sdk",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "TypeScript SDK and conformance harness for Genetic Assembly adapters",
   "type": "module",
   "main": "dist/index.js",

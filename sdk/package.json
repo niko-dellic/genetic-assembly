@@ -1,0 +1,39 @@
+{
+  "name": "@genetic-assembly/sdk",
+  "version": "0.3.0",
+  "type": "module",
+  "description": "Define, run, and inspect reproducible optimization studies",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    },
+    "./schemas/*": "./schemas/*"
+  },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test tests/*.mjs",
+    "prepack": "node ../scripts/prepare-package.mjs sdk"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "@types/node": "^24.7.2"
+  }
+}

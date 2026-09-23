@@ -1,13 +1,15 @@
 {
   "name": "@genetic-assembly/cli",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Scaffold and operate a local Genetic Assembly companion",
   "type": "module",
   "bin": {
     "ga": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "backend",
+    "templates"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -20,7 +22,7 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "repository": {
     "type": "git",
@@ -30,5 +32,8 @@
   "publishConfig": {
     "access": "public"
   },
-  "homepage": "https://genetic-assembly-docs.vercel.app/"
+  "homepage": "https://genetic-assembly-docs.vercel.app/",
+  "dependencies": {
+    "@genetic-assembly/sdk": "file:../sdk"
+  }
 }

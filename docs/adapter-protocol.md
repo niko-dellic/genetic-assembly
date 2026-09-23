@@ -1,6 +1,6 @@
 # Adapter protocol v1
 
-`genetic-assembly-adapter-v1` is newline-delimited JSON over a trusted child process's stdin/stdout. Stdout is protocol-only; diagnostics go to stderr. Every envelope contains `protocol_version`, `request_id`, and `type`. Responses must preserve the request ID.
+`genetic-assembly-adapter-v2` is newline-delimited JSON over a trusted child process's stdin/stdout. Stdout is protocol-only; diagnostics go to stderr. Every envelope contains `protocol_version`, `request_id`, and `type`. Responses must preserve the request ID.
 
 ## Lifecycle
 
@@ -26,3 +26,7 @@ The complete JSON Schemas are published with `@genetic-assembly/adapter-sdk` und
 Genes, objective values, constraints, warnings, timing, hashes, and artifact keys may be returned inline. Simulation traces, full project snapshots, meshes, and other large evidence should be uploaded as artifacts and referenced by key.
 
 External adapters own concurrency. A Node adapter may use worker threads or subprocesses; Rust will not add a second Rayon layer around it. `SharedArrayBuffer` is an adapter-specific optimization and requires the project model to use suitable immutable binary storage.
+
+## Study evaluation history
+
+A study adapter records each seed-level measurement at `/v2/evaluations` before returning an evaluated batch. Owner ID, candidate ID, phase and seed determine an idempotent record identity. The registered problem metadata contains `study`, `studyId` and `runtimeIdentity`. Ordered variable IDs and objectives are authoritative; do not rely on JSON object ordering. The [Node SDK](./api-reference/node/index.md) handles this automatically.

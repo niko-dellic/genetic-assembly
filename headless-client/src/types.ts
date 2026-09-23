@@ -1,7 +1,8 @@
 export type Variable =
   | { kind: "real"; lower: number; upper: number }
   | { kind: "integer"; lower: number; upper: number; step?: number }
-  | { kind: "binary" };
+  | { kind: "binary" }
+  | { kind: "categorical"; choices: number };
 
 export interface Objective { name: string; direction: "minimize" | "maximize" }
 export interface ConstraintSpec { name: string; feasible_when?: "lte_zero" }
@@ -24,7 +25,7 @@ export interface ProblemBundle {
 export interface AdapterLaunch {
   name: string;
   adapter_version: string;
-  protocol_version?: "genetic-assembly-adapter-v1";
+  protocol_version?: "genetic-assembly-adapter-v2";
   command: string;
   args?: string[];
   working_directory?: string;

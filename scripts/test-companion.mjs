@@ -41,7 +41,7 @@ const problem = await call("/v1/problems", json({ bundle }));
 const adapter = await call("/v1/adapters", json({ launch: {
   name: "delivery-network-reference",
   adapter_version: "delivery-network-v1",
-  protocol_version: "genetic-assembly-adapter-v1",
+  protocol_version: "genetic-assembly-adapter-v2",
   command: adapterCommand,
   args: [adapterPath],
   working_directory: adapterWorkingDirectory,

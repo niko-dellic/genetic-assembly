@@ -3,7 +3,7 @@
 TypeScript helpers and conformance testing for trusted Genetic Assembly project adapters.
 
 ```bash
-npm install /path/to/genetic-assembly/artifacts/genetic-assembly-adapter-sdk-0.2.1.tgz
+npm install /path/to/genetic-assembly/artifacts/genetic-assembly-adapter-sdk-0.3.0.tgz
 ```
 
 ```ts

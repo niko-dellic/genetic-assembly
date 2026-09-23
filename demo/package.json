@@ -1,6 +1,6 @@
 {
   "name": "genetic-assembly-demo",
-  "version": "1.0.0",
+  "version": "0.3.0",
   "description": "Three.js client demo for the native Rust NSGA-II server",
   "type": "module",
   "scripts": {

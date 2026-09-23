@@ -1,6 +1,6 @@
 {
   "name": "@genetic-assembly/three",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Three.js integration for the Genetic Assembly companion",
   "type": "module",
   "main": "dist/index.js",

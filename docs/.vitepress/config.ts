@@ -15,10 +15,10 @@ export default defineConfig({
     search: { provider: 'local' }, outline: [2, 3],
     socialLinks: [{ icon: 'github', link: 'https://github.com/niko-dellic/genetic-assembly' }],
     sidebar: [
-      group('Start here', [['Overview', '/'], ['Installation', '/installation'], ['First optimization', '/quickstart']]),
-      group('Foundations', [['Core concepts', '/concepts'], ['Implement an adapter', '/integrating-another-repository'], ['Run lifecycle', '/runs'], ['Reading results', '/results']]),
-      group('Integrations', [['Three.js', '/three'], ['Visualizations', '/visualizations'], ['Recorded examples', '/examples'], ['Deployment', '/deployment']]),
-      group('Library exports', [['All functions', '/api-reference/functions'], ['Client', '/api-reference/client/'], ['Adapter SDK', '/api-reference/adapter-sdk/'], ['Three.js integration', '/api-reference/three/'], ['Visualization exports', '/api-reference/visualizations/']]),
+      group('Start here', [['Overview', '/'], ['Installation', '/installation'], ['First baseline and run', '/quickstart']]),
+      group('Foundations', [['Core concepts', '/concepts'], ['Author a study', '/integrating-another-repository'], ['Backend setup', '/backend'], ['Goals and seeds', '/goals'], ['Run lifecycle', '/runs'], ['Compare results', '/results'], ['Replay and storage', '/replay']]),
+      group('Integrations', [['grabm neighborhood', '/grabm'], ['Python', '/python'], ['Three.js', '/three'], ['Visualizations', '/visualizations'], ['Recorded examples', '/examples'], ['Deployment', '/deployment']]),
+      group('Library exports', [['All functions', '/api-reference/functions'], ['Study SDK', '/api-reference/sdk/'], ['Node model helpers', '/api-reference/node/'], ['grabm integration', '/api-reference/grabm/'], ['Inspector', '/api-reference/inspector/'], ['Three.js integration', '/api-reference/three/'], ['Visualization exports', '/api-reference/visualizations/']]),
       group('Reference', [['CLI commands', '/cli'], ['JSON schemas', '/schemas'], ['HTTP API', '/http-api'], ['Adapter protocol', '/adapter-protocol'], ['Evaluator context', '/evaluator-context'], ['Usage guide', '/usage-guide'], ['Troubleshooting', '/troubleshooting'], ['Maintaining the docs', '/contributing']]),
     ],
     footer: { message: 'Genetic Assembly · Deterministic NSGA-II optimization', copyright: 'MIT licensed' }

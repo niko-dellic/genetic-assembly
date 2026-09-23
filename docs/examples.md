@@ -19,3 +19,7 @@ The charts run in your browser using the visualization package. They do not subm
 ## Implement your own model
 
 Follow [the adapter guide](./integrating-another-repository.md) for multi-objective models, constraints, domain operators, validation, and materialization. The repository also contains a [delivery-network reference adapter](https://github.com/niko-dellic/genetic-assembly/tree/main/examples/reference-adapter).
+
+## Reproduce a study recording
+
+Initialize the numerical quickstart in an independent consumer, run `ga up`, then set `GA_STUDY_FILE` to that consumer's `.genetic-assembly/study.json` and `GA_SERVER_URL` to its companion URL before running `npm run docs:record` in the documentation checkout. The recording script repeats the experiment with the same solver seed and compares fronts before writing the chart data.

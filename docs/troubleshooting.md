@@ -1,17 +1,19 @@
 # Troubleshooting
 
 | Symptom | Action |
-| --- | --- |
-| npm cannot find a package version | Use the local tarballs; registry publication is deferred |
-| Container image cannot be pulled | Build the local image and set `GA_IMAGE` explicitly |
-| Connection refused | Run `ga doctor`, inspect Compose logs, and check the client's URL and mapped port |
-| Adapter module not found | Bundle dependencies and verify paths inside `/workspace` |
-| Native dependency fails in Docker | Build dependencies for the container OS and architecture |
-| Adapter version mismatch | Make the launch's `adapter_version` match the initialized adapter version |
-| Invalid evaluation | Return finite values in declared order and one result per candidate |
-| NDJSON parsing fails | Send logs to stderr; stdout contains only protocol messages |
-| Charts are blank | Give containers explicit height, validate the dataset, and inspect available history |
-| SSE stops in a proxy | Check streaming support, buffering, and connection timeouts |
-| Different seeded results | Check model randomness, immutable inputs, adapter version, and stable ordering |
+|---|---|
+| Missing metric | Check the goal's metric name and return a finite value for every selected goal and constraint |
+| Baseline differs across repeats | Seed every random source with `context.seed`; avoid clock/time, mutable state and nondeterministic external data |
+| Baseline invalid | Read validation issues, then fix inputs or declared bounds before optimizing |
+| Connection refused | Run `ga status`, inspect `ga logs`, and verify the configured port |
+| Package missing in Docker | Put it in production dependencies and retain the lockfile |
+| Missing data or child entry point | Add model assets to `files`; use complete tarballs instead of bundling the model into one file |
+| Local dependency directory rejected | Install a `.tgz` package instead of a linked source directory |
+| Native dependency fails | Use a compatible custom base image and explicit system dependencies |
+| Replay unavailable | Request replay for the selected candidate; search measurements do not retain every simulation trace |
+| Missing authored demand in grabm | Add explicit agent needs with IDs matching schedule/decision items, or declare a different custom metric |
+| Changed validation feasibility | Inspect validation seeds and constraints separately from the original search front |
+| Port already in use | Choose another port in `ga.config.json`; prepare the study again |
+| Restart cannot load runtime | Restore the snapshot volume together with Postgres and artifact storage |
 
-Use `docker compose -f .genetic-assembly/compose.yml logs companion` in your consumer repository to inspect runtime errors. Include the run ID, configuration, and relevant adapter version when reporting a failure.
+`ga check` runs the actual configured model and returns a nonzero status for actionable failures. Runtime errors remain explicit failed evaluations. For setup details see [backend setup](./backend.md); for seed semantics see [goals](./goals.md).

@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "ownerId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+    },
+    "studyId": {
+      "type": "string"
+    },
+    "candidateId": {
+      "type": "string"
+    },
+    "designHash": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "search",
+        "validation",
+        "baseline",
+        "replay"
+      ]
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "decisions": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": [
+          "number",
+          "boolean",
+          "string"
+        ]
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "invalid",
+        "failed"
+      ]
+    },
+    "metrics": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "repairs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "error": {
+      "type": "string"
+    },
+    "cacheKey": {
+      "type": "string"
+    },
+    "cached": {
+      "default": false,
+      "type": "boolean"
+    },
+    "runtimeMs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "datasetId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "ownerId",
+    "studyId",
+    "candidateId",
+    "designHash",
+    "phase",
+    "seed",
+    "decisions",
+    "status",
+    "metrics",
+    "constraints",
+    "warnings",
+    "repairs",
+    "cacheKey",
+    "cached",
+    "runtimeMs"
+  ],
+  "additionalProperties": false
+}

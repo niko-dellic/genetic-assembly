@@ -1,6 +1,6 @@
 # @genetic-assembly/visualizations
 
-Framework-neutral D3 and Three.js optimization charts. Install with `npm install /path/to/genetic-assembly/artifacts/genetic-assembly-visualizations-0.2.1.tgz three`.
+Framework-neutral D3 and Three.js optimization charts. Install with `npm install /path/to/genetic-assembly/artifacts/genetic-assembly-visualizations-0.3.0.tgz three`.
 
 Create a renderer, call `update({ dataset, selection })`, call `resize()` when the container changes size, and `destroy()` before removing it.
 

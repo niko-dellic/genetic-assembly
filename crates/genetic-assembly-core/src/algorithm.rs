@@ -489,6 +489,9 @@ fn validate_gene_batch(problem: &ProblemSpec, batch: &[Vec<f64>]) -> Result<(), 
                         && ((rounded as i128 - *lower as i128) % *step as i128 == 0
                             || rounded == *upper as f64)
                 }
+                Variable::Categorical { choices } => {
+                    gene.fract() == 0.0 && *gene >= 0.0 && *gene < *choices as f64
+                }
                 Variable::Binary => *gene == 0.0 || *gene == 1.0,
             };
             if !valid {
@@ -517,6 +520,11 @@ pub fn validate_problem_config(
     }
     for (index, variable) in problem.variables.iter().enumerate() {
         match variable {
+            Variable::Categorical { choices } if *choices < 2 => {
+                return Err(SolverError::InvalidProblem(format!(
+                    "categorical variable {index} needs at least two choices"
+                )));
+            }
             Variable::Real { lower, upper }
                 if !lower.is_finite() || !upper.is_finite() || lower >= upper =>
             {

@@ -2,6 +2,7 @@ mod error;
 mod executor;
 mod models;
 mod storage;
+mod studies;
 
 use crate::error::ApiError;
 use crate::models::*;
@@ -112,6 +113,7 @@ pub async fn run(config: ServerConfig) -> Result<(), Box<dyn std::error::Error>>
         api_token: config.api_token,
     });
     tokio::spawn(executor::run_executor(state.clone()));
+    tokio::spawn(studies::jobs(state.clone()));
     let app = router(state);
     let listener = TcpListener::bind(config.bind).await?;
     info!(address=%config.bind, "genetic assembly server listening");
@@ -143,6 +145,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/v1/runs/{id}/results", get(run_results))
         .route("/v1/runs/{id}/analytics", get(run_analytics))
         .route("/v1/runs/{id}/cancel", post(cancel_run))
+        .merge(studies::routes())
         .layer(DefaultBodyLimit::max(256 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
@@ -383,6 +386,11 @@ async fn authorize(
     request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    if request.method() == axum::http::Method::GET
+        && ["/", "/inspector.js", "/grabm.js", "/health"].contains(&request.uri().path())
+    {
+        return Ok(next.run(request).await);
+    }
     let Some(token) = &state.api_token else {
         return Ok(next.run(request).await);
     };

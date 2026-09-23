@@ -8,3 +8,8 @@ demo/node_modules
 demo/dist
 *.log
 .DS_Store
+
+**/node_modules
+cli/backend
+artifacts
+.env*

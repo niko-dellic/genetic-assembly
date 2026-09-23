@@ -1,18 +1,18 @@
 {
   "name": "genetic-assembly",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Native Rust NSGA-II local optimization companion",
   "type": "module",
   "scripts": {
-    "setup": "npm --prefix headless-client ci && npm --prefix adapter-sdk ci && npm --prefix cli ci && npm --prefix examples/reference-adapter ci && npm --prefix client ci && npm --prefix visualizations ci && npm --prefix demo ci",
+    "setup": "npm --prefix sdk ci && npm --prefix sdk run build && npm --prefix inspector ci && npm --prefix grabm-integration ci && npm --prefix headless-client ci && npm --prefix adapter-sdk ci && npm --prefix cli ci && npm --prefix examples/reference-adapter ci && npm --prefix client ci && npm --prefix visualizations ci && npm --prefix demo ci",
     "up": "node scripts/up.mjs",
     "up:backend": "docker compose up -d --build --wait postgres server",
     "down": "docker compose down",
     "status": "docker compose ps",
     "logs": "docker compose logs -f server postgres",
-    "build": "cargo build --workspace && npm run headless:build && npm run adapter-sdk:build && npm run cli:build && npm run reference:build && npm run client:build && npm run viz:build && npm run demo:build",
-    "test": "cargo test --workspace && npm run headless:type-check && npm run adapter-sdk:test && npm run cli:build && npm run reference:test && npm run client:type-check && npm run viz:type-check && npm run viz:test && npm run demo:type-check && npm run test:streams",
+    "build": "npm run build:packages && cargo build --workspace && npm run headless:build && npm run adapter-sdk:build && npm run cli:build && npm run reference:build && npm run client:build && npm run viz:build && npm run demo:build",
+    "test": "npm --prefix sdk run build && node --test sdk/tests/*.mjs && npm --prefix grabm-integration run build && node --test grabm-integration/tests/*.mjs && cargo test --workspace && npm run headless:type-check && npm run adapter-sdk:test && npm run cli:build && npm run reference:test && npm run client:type-check && npm run viz:type-check && npm run viz:test && npm run demo:type-check && npm run test:streams && npm run test:python",
     "server": "cargo run -p genetic-assembly-server",
     "client:install": "npm --prefix client install",
     "client:build": "npm --prefix client run build",
@@ -46,10 +46,13 @@
     "docs:dev": "npm run build:packages && npm --prefix tools/docs run dev",
     "docs:api": "npm run build:packages && npm --prefix tools/docs run generate",
     "docs:build": "npm run build:packages && npm --prefix tools/docs run build",
-    "docs:test": "npm run docs:build && npm --prefix tools/docs test",
+    "docs:test": "npm run docs:build && npm --prefix tools/docs test && npm run test:inspector",
     "docs:record": "node tools/docs/record.mjs",
     "test:streams": "npm run headless:build && npm run client:build && node scripts/test-streams.mjs",
-    "test:consumer-companion": "node tools/docs/tests/companion.mjs"
+    "test:consumer-companion": "node tools/docs/tests/companion.mjs",
+    "test:study": "npm --prefix sdk run build && node --test sdk/tests/*.mjs && npm --prefix grabm-integration run build && node --test grabm-integration/tests/*.mjs",
+    "test:inspector": "npm --prefix grabm-integration run build && npm --prefix inspector run build && node tools/docs/tests/inspector.mjs",
+    "test:python": "node tools/docs/tests/python.mjs"
   },
   "keywords": [
     "rust",

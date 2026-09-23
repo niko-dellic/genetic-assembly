@@ -1,30 +1,21 @@
 # Deployment
 
-## Local companion
+The default is the [managed local companion](./backend.md). `ga up` binds its API to localhost and keeps Postgres internal. Static documentation hosting does not host an optimization backend.
 
-Use the [local image and tarball workflow](./installation.md). The CLI Compose stack runs Postgres and the Rust server, retains data in named volumes, and mounts your project at `/workspace` read-only. Bundle JavaScript adapters so they run with the container's dependencies. Other adapter languages require a companion image containing the relevant runtime or a native deployment.
+## Native companion
 
-## Native development
+Build with `cargo build --release -p genetic-assembly-server`, provision Postgres, then set `DATABASE_URL`, `GA_BIND` and `GA_ARTIFACT_ROOT` before launching the binary. Install the model interpreter and dependencies separately. Register immutable runtime paths with `StudyClient.prepare`; they refer to this host.
 
-From the checkout:
+## Custom Docker runtime
 
-```sh
-docker compose up -d postgres
-DATABASE_URL=postgres://genetic_assembly:genetic_assembly@127.0.0.1:55433/genetic_assembly cargo run -p genetic-assembly-server
-```
+Extend the versioned local image to add interpreters or system libraries. Set `image` in `ga.config.json`. Runtime identity includes the base image ID, declared files and lockfile. Keep model code and data in declared snapshot files; do not rely on a mutable host mount.
 
-See [the usage guide](./usage-guide.md) for lifecycle commands. Postgres migrations run on startup. `GA_ARTIFACT_ROOT` selects local artifact storage; `GA_S3_BUCKET` enables the configured S3-compatible backend. Preserve artifacts alongside database backups.
+The default build disables npm install scripts. Native modules that need build steps must be installed in a compatible custom runtime. Do not assume a Windows or macOS dependency tree can run inside Linux.
 
-## Team deployments
+## Authentication and storage
 
-Use authentication and a controlled network for trusted users. `GA_API_TOKEN` enables the server's static bearer token; clients accept a token as their second constructor argument. Configure HTTPS and proxy support for long-lived SSE connections. Browser applications need an accessible API endpoint and appropriate cross-origin behavior. Never include private server credentials in a public documentation build.
+Use `GA_API_TOKEN` for a deployed companion and pass the bearer token to `StudyClient`. The local inspector has a connection authentication field. Frontend assets and health are readable without the token; study APIs remain protected. Use an authenticated reverse proxy and TLS when exposing a trusted-team service beyond localhost.
 
-Adapters are trusted executable code. This service is not designed as a public arbitrary-code execution endpoint.
+By default artifact bytes live below `GA_ARTIFACT_ROOT`. S3 deployment uses `GA_S3_BUCKET` with the credentials, endpoint and region understood by the server's S3 storage configuration. Preserve the same store and Postgres metadata together. Dataset manifests map resource paths to stored artifacts; moving metadata alone does not move the data.
 
-## Documentation hosting
-
-`npm run docs:build` writes a static site to `docs/dist`. The root Vercel configuration installs package and docs dependencies and builds that output. Vercel hosts only the guide and recorded examples; visitors run their own companion.
-
-## Future releases
-
-The release workflow verifies packages before publishing matching container and npm versions. Registry publication is currently deferred. Local tarballs remain usable independently of that workflow.
+A database backup plus artifact and snapshot archives is needed for complete recovery. Restore each into a new, empty namespace and test a retained replay before disposing of old data. `ga down` keeps data; `ga cleanup --delete-data` explicitly removes the current managed project's v2 volumes.

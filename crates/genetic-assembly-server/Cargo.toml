@@ -17,6 +17,7 @@ bytes.workspace = true
 chrono.workspace = true
 futures.workspace = true
 hex.workspace = true
+libc.workspace = true
 object_store.workspace = true
 rmp-serde.workspace = true
 serde.workspace = true

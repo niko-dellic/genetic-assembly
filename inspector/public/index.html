@@ -1,0 +1,8 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Genetic Assembly studies</title></head>
+<body style="margin:0;background:#101315;color:#e7eded"><details style="padding:12px;font:14px system-ui"><summary>Connection authentication</summary><form id="connection"><label>API token <input type="password" id="token" autocomplete="off"></label><button>Connect</button></form></details><div id="app"></div>
+<script type="module">
+import {mountInspector} from './inspector.js';
+let inspector;const start=()=>{inspector?.dispose();inspector=mountInspector(document.querySelector('#app'),{baseUrl:location.origin,token:document.querySelector('#token').value||undefined});};
+document.querySelector('#connection').onsubmit=event=>{event.preventDefault();start();};start();
+</script></body></html>

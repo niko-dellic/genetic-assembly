@@ -19,9 +19,9 @@ for(const file of html) {
 const context=readFileSync(resolve(root,'crates/genetic-assembly-script/src/lib.rs'),'utf8').split('return Object.freeze({{')[1].split('}});')[0];
 const guide=readFileSync(resolve(root,'docs/evaluator-context.md'),'utf8');
 for(const [,name] of context.matchAll(/^    (\w+): /gm)) assert(guide.includes('`'+name+'('),`Undocumented evaluator function ${name}`);
-const server=readFileSync(resolve(root,'crates/genetic-assembly-server/src/lib.rs'),'utf8');
+const server=readFileSync(resolve(root,'crates/genetic-assembly-server/src/lib.rs'),'utf8')+readFileSync(resolve(root,'crates/genetic-assembly-server/src/studies.rs'),'utf8');
 const http=readFileSync(resolve(root,'docs/http-api.md'),'utf8');
-for(const [,route] of server.matchAll(/\.route\("([^"]+)"/g)) assert(http.includes(route),`Undocumented route ${route}`);
+for(const [,route] of server.matchAll(/\.route\(\s*"([^"]+)"/g)) assert(http.includes(route),`Undocumented route ${route}`);
 const recording=JSON.parse(readFileSync(resolve(output,'examples/two-targets.json')));
 assert(recording.provenance.config.seed===42 && recording.dataset.generations.length===12);
 console.log(`Validated ${html.length} HTML pages, links, evaluator/HTTP coverage, and recorded example.`);

@@ -3,7 +3,7 @@
 Framework-independent API client for the Genetic Assembly local NSGA-II companion.
 
 ```bash
-npm install /path/to/genetic-assembly/artifacts/genetic-assembly-client-0.2.1.tgz
+npm install /path/to/genetic-assembly/artifacts/genetic-assembly-client-0.3.0.tgz
 ```
 
 ```ts

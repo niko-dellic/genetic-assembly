@@ -1,26 +1,29 @@
 # Genetic Assembly
 
-## Optimization for your application
+Turn an application's design choices into a reproducible optimization study. Define what may change, measure competing goals, compare candidates with a baseline, and export a chosen design.
 
-Turn project decisions into a reproducible search. Describe the variables you can change, evaluate the objectives you care about, and inspect a set of trade-offs instead of a single opaque answer.
+The JavaScript SDK integrates your model with a local Rust NSGA-II companion. Docker manages the companion and its internal Postgres database. Simulation code stays in your application; the solver understands decisions, measurements, and feasibility.
 
-Genetic Assembly runs deterministic NSGA-II in a Rust companion. Your application connects with a small TypeScript client; your model runs in a trusted adapter or the built-in Three.js evaluator. Docker provides the companion and Postgres locally.
+## Start with your application
 
-[Install the packages](./installation.md) · [Run your first optimization](./quickstart.md) · [Browse all functions](./api-reference/functions.md)
+1. [Install local packages](./installation.md) into your own project.
+2. [Define and check a baseline](./quickstart.md).
+3. [Declare decisions and goals](./integrating-another-repository.md).
+4. [Run an experiment](./runs.md) with fixed simulation seeds.
+5. [Compare results](./results.md), [retain selected replays](./replay.md), and export.
 
-## Choose your integration
+For a complete simulation example, use the [grabm neighborhood study](./grabm.md). It changes bounded graph geometry and capacity while holding population and authored demand fixed.
 
-| Your project | Start with |
-| --- | --- |
-| Simulation, scheduling, layout, or another custom model | [Adapter integration](./integrating-another-repository.md) |
-| Static Three.js scene with numeric levers | [Three.js guide](./three.md) |
-| Existing optimization results to display | [Visualization guide](./visualizations.md) |
-| Python or another runtime | [NDJSON adapter protocol](./adapter-protocol.md) |
+## Choose an integration
 
-## What runs where
+| Package | Purpose |
+|---|---|
+| `@genetic-assembly/sdk` | Browser-safe study client, contracts, run handles |
+| `@genetic-assembly/sdk/node` | Study definitions, validation, model execution |
+| `@genetic-assembly/cli` | Initialize, package, run and manage local services |
+| `@genetic-assembly/grabm` | Optional bounded graph simulation adapter |
+| `@genetic-assembly/inspector` | Optional mountable study browser |
+| `@genetic-assembly/three` | Optional existing scene integration |
+| `@genetic-assembly/visualizations` | Optional charts |
 
-The application submits immutable problem and adapter revisions over HTTP. The companion performs evolution and selection, asks the adapter to evaluate candidate batches, and stores run state in Postgres. Artifacts and checkpoints use local or S3-compatible storage. Your application receives progress over SSE and retrieves the final Pareto front.
-
-Installing the JavaScript packages does not embed the optimizer. The companion must be running. Browser/WASM solving, NSGA-III, and hostile multi-tenant execution are outside the current release.
-
-[Explore recorded results](./examples.md) to understand the output before connecting your model.
+Version 0.3 introduces the study workflow and `/v2` API. npm publication is deferred; use coordinated local tarballs. The previous low-level scene and adapter references remain available for existing development integrations.

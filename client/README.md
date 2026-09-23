@@ -3,7 +3,7 @@
 Three.js integration for the Genetic Assembly local NSGA-II companion.
 
 ```bash
-npm install /path/to/genetic-assembly/artifacts/genetic-assembly-three-0.2.1.tgz three
+npm install /path/to/genetic-assembly/artifacts/genetic-assembly-three-0.3.0.tgz three
 ```
 
 The package provides:

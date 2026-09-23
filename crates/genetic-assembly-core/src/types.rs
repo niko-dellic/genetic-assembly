@@ -20,6 +20,10 @@ pub enum Variable {
         step: u64,
     },
     Binary,
+    /// Unordered categories encoded as indices, never interpolated.
+    Categorical {
+        choices: usize,
+    },
 }
 
 const fn default_step() -> u64 {

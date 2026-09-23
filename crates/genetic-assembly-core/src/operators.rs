@@ -19,6 +19,7 @@ pub fn random_genes(variables: &[Variable], rng: &mut ChaCha20Rng) -> Vec<f64> {
                 let slots = (span / *step as u128) as u64;
                 (*lower as i128 + rng.random_range(0..=slots) as i128 * *step as i128) as f64
             }
+            Variable::Categorical { choices } => rng.random_range(0..*choices) as f64,
             Variable::Binary => {
                 if rng.random_bool(0.5) {
                     1.0
@@ -76,7 +77,7 @@ pub fn make_child(
                 );
                 quantize_integer(raw, *lower, *upper, *step)
             }
-            Variable::Binary => {
+            Variable::Categorical { .. } | Variable::Binary => {
                 if rng.random_bool(variation.crossover_probability) && rng.random_bool(0.5) {
                     right.genes[index]
                 } else {
@@ -106,6 +107,18 @@ pub fn make_child(
                     *upper,
                     *step,
                 ),
+                Variable::Categorical { choices } => {
+                    if *choices <= 1 {
+                        0.0
+                    } else {
+                        let pick = rng.random_range(0..choices - 1);
+                        if pick >= value as usize {
+                            (pick + 1) as f64
+                        } else {
+                            pick as f64
+                        }
+                    }
+                }
                 Variable::Binary => {
                     if value >= 0.5 {
                         0.0
@@ -187,6 +200,38 @@ fn quantize_integer(value: f64, lower: i64, upper: i64, step: u64) -> f64 {
 mod tests {
     use super::*;
     use rand::SeedableRng;
+
+    #[test]
+    fn categorical_mutation_is_unordered_and_changes_category() {
+        let variables = vec![Variable::Categorical { choices: 4 }];
+        let parent = Individual {
+            id: 1,
+            genes: vec![0.0],
+            objectives: vec![],
+            constraints: vec![],
+            constraint_violation: 0.0,
+            rank: 0,
+            crowding_distance: 0.0,
+            evidence: None,
+        };
+        let variation = Variation {
+            crossover_probability: 0.0,
+            mutation_probability: 1.0,
+            sbx_distribution_index: 15.0,
+            mutation_distribution_index: 20.0,
+        };
+        let mut rng = ChaCha20Rng::seed_from_u64(7);
+        let mut counts = [0usize; 4];
+        for _ in 0..3000 {
+            let child = make_child(&parent, &parent, &variables, &variation, &mut rng);
+            assert_eq!(child[0].fract(), 0.0);
+            counts[child[0] as usize] += 1;
+        }
+        assert_eq!(counts[0], 0);
+        for count in &counts[1..] {
+            assert!((850..1150).contains(count));
+        }
+    }
 
     #[test]
     fn mixed_variation_stays_typed_and_bounded() {

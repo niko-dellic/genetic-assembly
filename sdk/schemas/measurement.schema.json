@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "metrics": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]*$"
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "warnings": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "metrics",
+    "warnings"
+  ],
+  "additionalProperties": false
+}

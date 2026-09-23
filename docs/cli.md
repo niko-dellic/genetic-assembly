@@ -1,20 +1,19 @@
 # CLI commands
 
-Install the CLI tarball as a development dependency and use `npx ga <command>` from your consumer repository.
+Run commands in the consuming project containing `ga.config.json`.
 
-| Command | Behavior |
-| --- | --- |
-| `init` | Creates `.genetic-assembly` problem, adapter, environment, and Compose files; preserves existing files |
-| `up` | Starts Postgres and the companion and waits for health checks |
-| `down` | Stops the stack while retaining named volumes |
-| `doctor` | Prints Docker availability, companion health, and checks scaffold files |
-| `test-adapter` | Exercises initialize/evaluate/shutdown on the scaffold's `adapter.mjs` |
-| `help` | Prints command usage |
+| Command | Result |
+|---|---|
+| `ga init [--template grabm]` | Create study and runtime configuration, preserving existing files |
+| `ga check` | Evaluate the configured baseline twice, check named metrics and repeatability; nonzero on failure |
+| `ga up` | Snapshot, build, start and register the study |
+| `ga baseline` | Prepare and retain baseline evaluations/replays |
+| `ga run [--population N] [--generations N] [--seed N]` | Prepare, optimize, observe and export |
+| `ga inspect` | Open the companion's local inspector |
+| `ga status` | Query health, revisions, runs and jobs |
+| `ga logs` | Show recent service logs |
+| `ga down` | Stop services, preserving data |
+| `ga backup DIRECTORY` | Export database metadata, artifact bytes and runtime snapshots |
+| `ga cleanup --delete-data` | Explicitly delete this project's v2 volumes |
 
-`test-adapter` is a scaffold smoke check, not a full test of every custom launch configuration. Use `runConformanceSuite` for SDK adapters and domain tests for your model. `doctor` prints service failures; inspect the output rather than relying only on its exit status.
-
-## Environment
-
-Set `GA_IMAGE` to your local or released companion image. `.genetic-assembly/.env` sets `PROJECT_ROOT`, `GA_SERVER_PORT`, and `GA_POSTGRES_PORT`. `GA_SERVER_URL` selects the URL checked by `doctor`.
-
-Container launch records use `/workspace` paths; native launches use host paths. If ports are occupied, change them in the environment file and use the matching base URL in the client.
+Runtime files and locked dependencies are declared once. No hand-written NDJSON or container paths are needed for the managed local workflow. [Backend setup](./backend.md) documents custom runtimes, volumes and recovery.

@@ -17,3 +17,7 @@ The [generated SDK types](./api-reference/adapter-sdk/index.md) describe TypeScr
 - [Problem bundle](./schemas/problem-bundle.schema.json)
 - [Adapter launch](./schemas/adapter-launch.schema.json)
 - [Adapter protocol](./schemas/adapter-protocol.schema.json)
+
+## Study contracts
+
+The SDK exports Zod schemas and inferred TypeScript types from one contract source. Generated JSON Schemas are shipped in `@genetic-assembly/sdk/schemas/`: [study](/schemas/study.schema.json), [evaluation](/schemas/evaluation.schema.json), [measurement](/schemas/measurement.schema.json), and [decision](/schemas/decision.schema.json). Runtime checks also enforce relational rules such as unique categories, valid baselines, and disjoint seed sets. Study schema version is 2.

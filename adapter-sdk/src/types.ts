@@ -1,9 +1,10 @@
-export const ADAPTER_PROTOCOL_VERSION = "genetic-assembly-adapter-v1" as const;
+export const ADAPTER_PROTOCOL_VERSION = "genetic-assembly-adapter-v2" as const;
 
 export type Variable =
   | { kind: "real"; lower: number; upper: number }
   | { kind: "integer"; lower: number; upper: number; step?: number }
-  | { kind: "binary" };
+  | { kind: "binary" }
+  | { kind: "categorical"; choices: number };
 export interface Objective { name: string; direction: "minimize" | "maximize" }
 export interface ProblemBundle {
   schema_version?: 1;

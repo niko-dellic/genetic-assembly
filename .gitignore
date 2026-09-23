@@ -14,3 +14,5 @@ dist
 .env.*.local
 
 /docs/public/schemas/
+
+/cli/backend/

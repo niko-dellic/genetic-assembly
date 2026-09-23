@@ -31,6 +31,9 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: |
+            sdk/package-lock.json
+            inspector/package-lock.json
+            grabm-integration/package-lock.json
             package-lock.json
             headless-client/package-lock.json
             adapter-sdk/package-lock.json
@@ -89,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [headless-client, adapter-sdk, cli, client, visualizations]
+        package: [sdk, inspector, cli, client, visualizations, grabm-integration]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

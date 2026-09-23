@@ -1,25 +1,27 @@
 # Core concepts
 
-## Variables and genes
+## Studies and revisions
 
-A genome is an ordered array of numbers. Real variables have lower/upper bounds; integer variables may specify a step; binary variables take 0 or 1. Keep variable IDs and ordering stable across problem, evaluation, and materialization.
+A study describes baseline inputs, named decisions, selected objectives, constraints and simulation seed sets. Preparing it produces an immutable revision with a runtime identity. An experiment runs the solver against that revision. Candidate designs and seed-level evaluations retain their relationship to the revision even after the application changes.
 
-## Objectives and trade-offs
+## Decisions
 
-Declare each objective as `minimize` or `maximize`. Genetic Assembly normalizes maximization internally. NSGA-II uses non-dominated sorting and crowding distance to retain diverse trade-offs. The Pareto front is a set of candidates for the application or user to choose among, not a promise of a global optimum.
+Real and integer decisions have bounds; integers may use a step. Boolean decisions activate a declared choice. Categorical decisions select unordered alternatives. The SDK handles numeric solver positions internally, so model code uses stable names and values.
 
-## Constraints
+## Objectives and constraints
 
-Return one finite value for each declared constraint. A value `<= 0` is feasible. For capacity that must be at least 80, return `80 - capacity`. Feasible candidates dominate infeasible ones; constraint violation guides selection among infeasible candidates.
+Objectives declare `minimize` or `maximize`. NSGA-II retains non-dominated trade-offs rather than promising one universally best candidate. Each constraint references a measurement and bound; signed values of zero or less are feasible. Feasible candidates dominate infeasible ones, with aggregate violation guiding selection among infeasible candidates.
 
-## Evolution
+## Evaluations and replay
 
-Each generation creates offspring and selects from parents plus offspring. Built-in operators support real, stepped integer, and binary variables. Adapter-owned operators let the project construct and repair domain-specific candidates while Rust retains NSGA-II selection.
+Each candidate is evaluated against the same search seed set, and every seed's raw measurements remain available. Baselines and selected replay jobs may also retain full simulation datasets. A measured candidate does not necessarily have replay data.
+
+Finalists are evaluated on disjoint validation seeds. Their validated front is distinct from the original search front, including when validation changes feasibility.
 
 ## Reproducibility
 
-Use fixed seeds and stable input ordering. Adapter results must not depend on wall time, request arrival order, or ambient randomness. For stochastic simulations, evaluate using a fixed set of model seeds. Change the adapter version whenever its mathematical behavior changes. Revisions and checkpoints identify exact input contracts; they do not snapshot arbitrary project files or adapter process memory.
+Keep inputs and seed policies fixed and use `context.seed` inside the model. Managed preparation snapshots declared files and locked dependencies. The solver seed controls evolutionary variation independently of simulation seeds. Checkpoints and idempotent evaluation identities support compatible recovery without inventing new measurements for completed work.
 
 ## Trusted execution
 
-Adapters execute project code in the companion environment. The built-in QuickJS evaluator restricts ambient capabilities, but this system is intended for trusted project code. Keep the service local or behind access controls for trusted users.
+Models execute application code in the companion environment. Keep the default localhost configuration or deploy behind appropriate access controls for a trusted team. See [model authoring](./integrating-another-repository.md), [goals](./goals.md) and [backend setup](./backend.md).

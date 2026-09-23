@@ -1,0 +1,47 @@
+{
+  "name": "@genetic-assembly/grabm",
+  "version": "0.3.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test tests/graph.mjs"
+  },
+  "dependencies": {
+    "@genetic-assembly/sdk": "file:../sdk"
+  },
+  "peerDependencies": {
+    "@grabm/abm": "0.1.0",
+    "three": ">=0.180.0"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@grabm/abm": "file:../vendor/grabm-abm-0.1.0.tgz",
+    "three": "^0.185.1",
+    "@types/three": "^0.185.1",
+    "typescript": "~5.9.3",
+    "@types/node": "^24.7.2"
+  }
+}

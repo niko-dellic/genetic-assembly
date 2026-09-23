@@ -1,17 +1,22 @@
-# Reading results
+# Compare and export
 
-## Final candidates
+Open `ga inspect` to browse prepared study revisions, experiments, baseline/replay jobs and paginated seed-level measurements. Inspect warnings and failed evaluations before interpreting a front.
 
-`getResults(runId)` returns `members`. Each member contains an `individual` with ordered genes, objectives, constraints, rank, crowding distance, and total constraint violation. Generic adapters can add a `materialization`; Three.js runs return scene patches.
+Compare raw metric values with their direction, units, number of seeds, and variability. A promising search candidate is not necessarily validated. Missing replay data means no trace has been retained; it does not mean the candidate was never measured.
 
-Use objective names and directions from the problem when presenting trade-offs. A numerically smaller maximizing objective is not better. Inspect constraint feasibility before applying a candidate. Rank and crowding distance are selection metadata, not domain quality scores.
+`RunHandle.results()` separates `search` and `validated`. `RunHandle.export()` includes the revision, runtime identity, search/validation results, and every stored evaluation. The inspector can export a selected candidate with provenance. Exporting does not apply a design to your application.
 
-## Materialization
+## Mount in an application
 
-Keep evaluation responses compact. Use `materialize` to create application-facing output only for the retained front. Large outputs can be represented through stored artifacts. Applications own validation and the final choice to apply a solution.
+```js
+import { mountInspector } from '@genetic-assembly/inspector'
+const inspector = mountInspector(document.getElementById('optimization'), {
+  baseUrl: 'http://127.0.0.1:3001',
+  onPreview(decisions, study) { console.log(decisions, study) },
+  onExport(value) { console.log('Selected design', value) },
+  onReplay(dataset) { console.log('Open application replay', dataset) }
+})
+// Call inspector.dispose() when unmounting.
+```
 
-## Analytics
-
-`getAnalytics(runId)` returns objective, lever, and constraint metadata, retained candidates, and generation summaries. `history_complete` indicates whether full history is available. Do not present sampled fronts as complete historical populations.
-
-Convergence charts show objective statistics over generations; they do not establish optimality. The [visualizations package](./visualizations.md) consumes an `OptimizationDataset` matching these concepts.
+The inspector does not depend on an application framework. Your preview and replay callbacks control how exported designs and datasets are displayed or applied.

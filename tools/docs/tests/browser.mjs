@@ -27,7 +27,7 @@ try {
  await page.reload(); assert.equal(await page.locator('html').getAttribute('data-palette'),'violet');
  await page.getByRole('switch').click();
  await page.getByRole('button',{name:/Search/}).first().click();
- await page.locator('#localsearch-input').fill('CompanionClient');
+ await page.locator('#localsearch-input').fill('StudyClient');
  await page.locator('.VPLocalSearchBox .result').first().waitFor();
  await page.keyboard.press('Escape');
  await page.goto(url+'/examples.html');

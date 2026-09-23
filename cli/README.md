@@ -1,22 +1,24 @@
 # @genetic-assembly/cli
 
-Scaffold and operate a Genetic Assembly companion from another repository.
+Managed local optimization studies for consuming repositories. Requires Node 22.12+ and Docker with Compose. The archive includes the companion build recipe and Rust sources; you do not need a checkout or host Rust.
 
-```bash
-npm install /path/to/genetic-assembly/artifacts/genetic-assembly-cli-0.2.1.tgz
+Install the coordinated SDK and CLI tarballs together, then run:
+
+```sh
 npx ga init
-npx ga test-adapter
+npx ga check
 npx ga up
+npx ga baseline
+npx ga run
+npx ga inspect
 ```
 
-Commands:
+`ga init --template grabm` creates the optional neighborhood example. Install `@genetic-assembly/grabm` and grabm's public tarball first.
 
-- `ga init` creates a non-overwriting `.genetic-assembly` starter.
-- `ga test-adapter` exercises initialization, evaluation, and shutdown.
-- `ga up` starts the companion and Postgres.
-- `ga doctor` checks Docker, the API, and scaffold files.
-- `ga down` stops the local stack without deleting named volumes.
+`ga.config.json` declares your study entry, snapshot files, project name and local port. Runtime dependencies come from the lockfile. Complete package assets and subprocess entry points survive installation.
 
-See [Integrating Genetic Assembly into another repository](https://github.com/niko-dellic/genetic-assembly/blob/main/docs/integrating-another-repository.md).
+Use `ga status`, `ga logs`, `ga down`, and `ga backup DIRECTORY` for service management. `ga cleanup --delete-data` explicitly removes this project's v2 volumes. Previous development data is left intact.
 
-Registry publication is deferred. Build local tarballs with `npm run pack` from the source checkout. See the [installation guide](https://genetic-assembly-docs.vercel.app/installation.html).
+[Study guide](https://genetic-assembly-docs.vercel.app/quickstart.html) · [Runtime and storage](https://genetic-assembly-docs.vercel.app/backend.html)
+
+npm publication remains deferred.
