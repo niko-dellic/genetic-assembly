@@ -15,6 +15,6 @@ npm run ga:check
 
 Install coordinated tarballs together so npm resolves their internal dependencies locally. Keep `package-lock.json`. Use tarballs rather than directory links: runtime preparation vendors the archives and installs their locked dependencies inside Linux.
 
-For grabm, also install its public package tarball and `genetic-assembly-grabm-0.4.0.tgz`, then use `ga init --template grabm` in a fresh directory. The optional integration uses grabm's public APIs and includes no solver-specific changes to grabm.
+The [grabm example](./grabm.md) lives in `examples/neighborhood/` and installs its simulation dependencies separately. It is not part of the library tarballs.
 
 Add `.genetic-assembly/` to your application's ignore file. Commit the study, runtime configuration, and lockfile. See [backend setup](./backend.md) for storage ownership and [first baseline](./quickstart.md) for the complete workflow.

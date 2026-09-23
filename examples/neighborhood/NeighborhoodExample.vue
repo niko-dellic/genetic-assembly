@@ -42,9 +42,9 @@ async function start() {
       { default: study },
       { mountInspector, LocalInspectorProvider },
     ] = await Promise.all([
-      import("../../../sdk/dist/index.js"),
-      import("../../../examples/neighborhood/study.mjs"),
-      import("../../../inspector/dist/index.js"),
+      import("../../sdk/dist/index.js"),
+      import("./study.mjs"),
+      import("../../inspector/dist/index.js"),
     ]);
     if (cancelled.value) throw new DOMException("Cancelled", "AbortError");
     optimizer = new Optimizer({ memoryLimitBytes: 64 * 1024 * 1024 });
@@ -80,11 +80,11 @@ async function start() {
 }
 function cancel() {
   cancelled.value = true;
-  if (run) run.cancel(); else optimizer?.dispose();
+  if (run) run.cancel();
+  else optimizer?.dispose();
 }
 async function openReplay(dataset: any) {
-  const { mountGrabmReplay } =
-    await import("../../../grabm-integration/dist/browser.js");
+  const { mountGrabmReplay } = await import("./dist/browser.js");
   replay?.dispose();
   replay = await mountGrabmReplay(
     replayHost.value!,

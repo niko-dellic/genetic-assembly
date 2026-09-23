@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {serveLocalInspector} from "./local-inspector.js";
+import { serveLocalInspector } from "./local-inspector.js";
 import { spawnSync } from "node:child_process";
 import {
   readFileSync,
@@ -329,18 +329,36 @@ async function prepare(c: Config) {
 }
 async function main() {
   if (command === "init") {
+    if (args.includes("--template"))
+      throw Error(
+        "Examples live in the repository examples folder. ga init creates a numerical study.",
+      );
     const manifestPath = join(root, "package.json");
     const manifest = existsSync(manifestPath)
       ? JSON.parse(readFileSync(manifestPath, "utf8"))
       : { private: true };
     if (
-      manifest === null || typeof manifest !== "object" || Array.isArray(manifest) ||
+      manifest === null ||
+      typeof manifest !== "object" ||
+      Array.isArray(manifest) ||
       (manifest.scripts !== undefined &&
-        (manifest.scripts === null || typeof manifest.scripts !== "object" || Array.isArray(manifest.scripts)))
-    ) throw Error("package.json and its scripts field must be objects");
+        (manifest.scripts === null ||
+          typeof manifest.scripts !== "object" ||
+          Array.isArray(manifest.scripts)))
+    )
+      throw Error("package.json and its scripts field must be objects");
     manifest.scripts ??= {};
     let scriptsChanged = false;
-    for (const task of ["check", "up", "baseline", "run", "inspect", "status", "logs", "down"]) {
+    for (const task of [
+      "check",
+      "up",
+      "baseline",
+      "run",
+      "inspect",
+      "status",
+      "logs",
+      "down",
+    ]) {
       const name = `ga:${task}`;
       if (!Object.hasOwn(manifest.scripts, name)) {
         manifest.scripts[name] = `ga ${task}`;
@@ -349,7 +367,8 @@ async function main() {
         console.log(`Kept existing npm script ${name}`);
       }
     }
-    if (scriptsChanged) writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+    if (scriptsChanged)
+      writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
     mkdirSync(directory, { recursive: true });
     writeNew(
       join(root, "ga.config.json"),
@@ -365,13 +384,7 @@ async function main() {
         2,
       ) + "\n",
     );
-    const template = args[args.indexOf("--template") + 1];
-    writeNew(
-      join(root, "study.mjs"),
-      template === "grabm"
-        ? readFileSync(join(packageRoot, "templates/grabm.mjs"), "utf8")
-        : sample,
-    );
+    writeNew(join(root, "study.mjs"), sample);
     console.log(
       "Initialized study.mjs, ga.config.json and npm scripts. Run npm run ga:check, npm run ga:baseline, then npm run ga:run -- --inspect. Existing files and scripts are preserved.",
     );
@@ -379,47 +392,90 @@ async function main() {
   }
   if (command === "help") {
     console.log(
-      "ga init [--template grabm] | check | up | baseline | run | inspect | status | logs | down | backup <directory> | cleanup\nModels use study.mjs; ga.config.json declares snapshot files. Storage uses a separate v4 namespace.",
+      "ga init | check | up | baseline | run | inspect | status | logs | down | backup <directory> | cleanup\nModels use study.mjs; ga.config.json declares snapshot files. Storage uses a separate v4 namespace.",
     );
     return;
   }
   if (command === "inspect" && args[1] && !args[1].startsWith("--")) {
-    if (lstatSync(resolve(args[1])).size > 512 * 1024 * 1024) throw Error("Archive exceeds the 512 MiB inspection limit");
-    const server = await serveLocalInspector({assets:join(packageRoot,"backend/inspector/public"),archive:readFileSync(resolve(args[1]))});
-    console.log(`Read-only archive inspector: ${server.url}. Press Ctrl+C to close.`);
+    if (lstatSync(resolve(args[1])).size > 512 * 1024 * 1024)
+      throw Error("Archive exceeds the 512 MiB inspection limit");
+    const server = await serveLocalInspector({
+      assets: join(packageRoot, "backend/inspector/public"),
+      archive: readFileSync(resolve(args[1])),
+    });
+    console.log(
+      `Read-only archive inspector: ${server.url}. Press Ctrl+C to close.`,
+    );
     return;
   }
   const c = config();
-  const service = args.includes("--service") || c.execution === "service" || !!c.baseUrl;
+  const service =
+    args.includes("--service") || c.execution === "service" || !!c.baseUrl;
   if (!service && ["baseline", "run", "inspect"].includes(command)) {
     const model = (await import(pathToFileURL(safePath(c.entry)).href)).default;
     const optimizer = new Optimizer();
     let inspector: Awaited<ReturnType<typeof serveLocalInspector>> | undefined;
-    const stop = () => {optimizer.dispose(); void inspector?.close();};
-    process.once("SIGINT", stop); process.once("SIGTERM", stop);
+    const stop = () => {
+      optimizer.dispose();
+      void inspector?.close();
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
     try {
       if (args.includes("--inspect") || command === "inspect") {
-        inspector = await serveLocalInspector({assets:join(packageRoot,"backend/inspector/public"),optimizer,model});
-        console.log(`Local inspector: ${inspector.url}. Press Ctrl+C to close.`);
+        inspector = await serveLocalInspector({
+          assets: join(packageRoot, "backend/inspector/public"),
+          optimizer,
+          model,
+        });
+        console.log(
+          `Local inspector: ${inspector.url}. Press Ctrl+C to close.`,
+        );
       }
       const baseline = await optimizer.baseline(model);
       console.log("Baseline:", JSON.stringify(baseline));
       if (command === "run") {
-        const value = (flag:string,fallback:number) => {const index=args.indexOf(flag);return index < 0 ? fallback : Number(args[index+1]);};
-        const run = optimizer.run(model,{populationSize:value("--population",24),generations:value("--generations",8),seed:value("--seed",42)});
-        const unsubscribe = run.subscribe(status=>console.log(`${status.status}: generation ${status.progress?.generation??0}`));
-        const status = await run.wait(); unsubscribe();
-        if (status.status !== "completed") throw Error(status.error??status.status);
+        const value = (flag: string, fallback: number) => {
+          const index = args.indexOf(flag);
+          return index < 0 ? fallback : Number(args[index + 1]);
+        };
+        const run = optimizer.run(model, {
+          populationSize: value("--population", 24),
+          generations: value("--generations", 8),
+          seed: value("--seed", 42),
+        });
+        const unsubscribe = run.subscribe((status) =>
+          console.log(
+            `${status.status}: generation ${status.progress?.generation ?? 0}`,
+          ),
+        );
+        const status = await run.wait();
+        unsubscribe();
+        if (status.status !== "completed")
+          throw Error(status.error ?? status.status);
         const results = run.results();
-        console.log(`Search front: ${results.search.pareto_front.length}; validated front: ${results.validatedFront.length}; retained measurements: ${optimizer.history().length}`);
+        console.log(
+          `Search front: ${results.search.pareto_front.length}; validated front: ${results.validatedFront.length}; retained measurements: ${optimizer.history().length}`,
+        );
       }
-      const exportIndex=args.indexOf("--export");
-      if(exportIndex>=0) {
-        const path=args[exportIndex+1]; if(!path||path.startsWith("--")) throw Error("--export requires a path");
-        writeFileSync(resolve(path),await optimizer.export());console.log(`Exported ${path}`);
+      const exportIndex = args.indexOf("--export");
+      if (exportIndex >= 0) {
+        const path = args[exportIndex + 1];
+        if (!path || path.startsWith("--"))
+          throw Error("--export requires a path");
+        writeFileSync(resolve(path), await optimizer.export());
+        console.log(`Exported ${path}`);
       }
-    } catch(error) {stop();throw error;}
-    finally {if(!inspector){optimizer.dispose();process.removeListener("SIGINT",stop);process.removeListener("SIGTERM",stop);}}
+    } catch (error) {
+      stop();
+      throw error;
+    } finally {
+      if (!inspector) {
+        optimizer.dispose();
+        process.removeListener("SIGINT", stop);
+        process.removeListener("SIGTERM", stop);
+      }
+    }
     return;
   }
   if (command === "check") {
@@ -559,11 +615,17 @@ async function main() {
         throw Error(status.error ?? status.status);
       const exportIndex = args.indexOf("--export");
       if (exportIndex >= 0) {
-        const path = args[exportIndex+1];
-        if (!path || path.startsWith("--")) throw Error("--export requires a path");
+        const path = args[exportIndex + 1];
+        if (!path || path.startsWith("--"))
+          throw Error("--export requires a path");
         writeFileSync(resolve(path), await run.archive());
-        console.log(`Exported portable archive ${path}. Open it with npm run ga:inspect -- ${path}.`);
-      } else console.log(`Completed durable run ${run.id}. Open npm run ga:inspect -- --service to compare designs.`);
+        console.log(
+          `Exported portable archive ${path}. Open it with npm run ga:inspect -- ${path}.`,
+        );
+      } else
+        console.log(
+          `Completed durable run ${run.id}. Open npm run ga:inspect -- --service to compare designs.`,
+        );
     }
     return;
   }

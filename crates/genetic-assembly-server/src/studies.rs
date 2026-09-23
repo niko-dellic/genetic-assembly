@@ -57,7 +57,6 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/v2/artifacts/{id}", get(super::get_artifact))
         .route("/", get(inspector))
         .route("/inspector.js", get(inspector_js))
-        .route("/grabm.js", get(grabm_js))
 }
 async fn inspector() -> Response {
     (
@@ -70,14 +69,6 @@ async fn inspector_js() -> Response {
     (
         [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
         include_str!("../../../inspector/public/inspector.js"),
-    )
-        .into_response()
-}
-
-async fn grabm_js() -> Response {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("../../../inspector/public/grabm.js"),
     )
         .into_response()
 }

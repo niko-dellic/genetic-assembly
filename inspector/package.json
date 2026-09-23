@@ -9,7 +9,7 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build": "tsc -p tsconfig.json && esbuild src/index.ts --bundle --minify --format=esm --platform=browser --outfile=public/inspector.js && esbuild src/grabm.ts --bundle --minify --format=esm --platform=browser --outfile=public/grabm.js"
+    "build": "tsc -p tsconfig.json && esbuild src/index.ts --bundle --minify --format=esm --platform=browser --outfile=public/inspector.js"
   },
   "dependencies": {
     "@genetic-assembly/sdk": "file:../sdk"

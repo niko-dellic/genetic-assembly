@@ -18,14 +18,13 @@ For a complete simulation example, use the [grabm neighborhood study](./grabm.md
 
 ## Choose an integration
 
-| Package | Purpose |
-|---|---|
-| `@genetic-assembly/sdk` | Browser-safe study client, contracts, run handles |
-| `@genetic-assembly/sdk/node` | Study definitions, validation, model execution |
-| `@genetic-assembly/cli` | Initialize, package, run and manage local services |
-| `@genetic-assembly/grabm` | Optional bounded graph simulation adapter |
-| `@genetic-assembly/inspector` | Optional mountable study browser |
-| `@genetic-assembly/three` | Optional existing scene integration |
-| `@genetic-assembly/visualizations` | Optional charts |
+| Package                            | Purpose                                            |
+| ---------------------------------- | -------------------------------------------------- |
+| `@genetic-assembly/sdk`            | Browser-safe study client, contracts, run handles  |
+| `@genetic-assembly/sdk/node`       | Study definitions, validation, model execution     |
+| `@genetic-assembly/cli`            | Initialize, package, run and manage local services |
+| `@genetic-assembly/inspector`      | Optional mountable study browser                   |
+| `@genetic-assembly/three`          | Optional existing scene integration                |
+| `@genetic-assembly/visualizations` | Optional charts                                    |
 
 Version 0.4 introduces the study workflow and `/v2` API. npm publication is deferred; use coordinated local tarballs. The previous client/adapter packages and scene HTTP routes have been removed.

@@ -4,14 +4,16 @@ All seed measurements are retained. Full simulation traces are generated for bas
 
 The model's dataset hook returns a directory, manifest key and run hash. The SDK uploads each resource into the companion's artifact store, then registers a dataset linking those resource keys to artifacts. Retrieve bytes below `client.datasetUrl(dataset.id)`.
 
-For grabm:
+Replay rendering belongs to the consuming application. Supply `onReplay` when mounting the inspector; without a viewer, it still exposes dataset manifests and measurements.
+
+The grabm neighborhood example includes a local helper in `examples/neighborhood/src/browser.ts`:
 
 ```js
-import { openGrabmReplay } from '@genetic-assembly/grabm/browser'
-const source = await openGrabmReplay(client.datasetUrl(dataset.id), dataset)
-console.log(source.summary)
+import { openGrabmReplay } from "./dist/browser.js";
+const source = await openGrabmReplay(client.datasetUrl(dataset.id), dataset);
+console.log(source.summary);
 // Use source with grabm's playback APIs; dispose when finished.
-source.dispose()
+source.dispose();
 ```
 
 The original manifest and resource paths remain intact so grabm's public dataset reader can reopen the simulation after restart. Search-only candidates show replay unavailable until requested. Final candidates remain eligible for later replay generation.

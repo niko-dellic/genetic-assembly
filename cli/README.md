@@ -14,7 +14,7 @@ npm run ga:inspect -- study.ga.json
 
 `ga init` adds the `ga:*` npm scripts above and preserves existing scripts with the same names. Pass command options after `--`, for example `npm run ga:run -- --population 12`.
 
-`ga init --template grabm` creates the optional neighborhood example. Install `@genetic-assembly/grabm` and grabm's public tarball first.
+`ga init` creates a numerical study. Application examples, including grabm, live in the repository’s `examples/` folder and are not bundled into the CLI.
 
 `ga.config.json` declares your study entry, snapshot files, project name and local port. Runtime dependencies come from the lockfile. Complete package assets and subprocess entry points survive installation.
 

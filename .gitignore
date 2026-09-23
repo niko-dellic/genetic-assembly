@@ -17,3 +17,6 @@ dist
 /docs/public/docs/schemas/
 
 /cli/backend/
+
+/examples/**/.genetic-assembly/
+/examples/**/*.ga.json

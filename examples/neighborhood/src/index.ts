@@ -9,10 +9,7 @@ import {
 import { Scenario, Simulation } from "@grabm/abm";
 import { writeRunDataset } from "@grabm/abm/datasets";
 import { analyzeRun, type AnalysisResult } from "@grabm/abm/analytics";
-import {
-  defineStudy,
-  type StudyModel,
-} from "@genetic-assembly/sdk";
+import { defineStudy, type StudyModel } from "@genetic-assembly/sdk";
 import {
   canonical,
   type Decisions,
@@ -473,18 +470,33 @@ export function defineGrabmStudy(options: GrabmStudyOptions): StudyModel {
       const input = reconstruct(values);
       input.run = { ...input.run, seed: context.seed };
       let run: RunResult | undefined;
-      const execution = options.execution ?? (typeof process !== 'undefined' && process.versions?.node ? 'node' : 'browser');
-      if (execution === 'node') {
-        const moduleName = '@grabm/abm/node';
-        const {runBatch} = await import(/* @vite-ignore */ moduleName);
-        for await (const outcome of runBatch([{id: 'candidate', input}], {workers: 1, signal: context.signal})) {
-          if (outcome.status === 'failed') throw outcome.error;
+      const execution =
+        options.execution ??
+        (typeof process !== "undefined" && process.versions?.node
+          ? "node"
+          : "browser");
+      if (execution === "node") {
+        const moduleName = "@grabm/abm/node";
+        const { runBatch } = await import(/* @vite-ignore */ moduleName);
+        for await (const outcome of runBatch([{ id: "candidate", input }], {
+          workers: 1,
+          signal: context.signal,
+        })) {
+          if (outcome.status === "failed") throw outcome.error;
           run = outcome.result as RunResult;
         }
       } else {
-        const simulation = new Simulation({graph: input.graph, facilities: input.facilities, scenario: new Scenario(input.scenario), execution: 'worker'});
-        try { run = await simulation.run({...input.run, signal: context.signal}); }
-        finally { simulation.dispose(); }
+        const simulation = new Simulation({
+          graph: input.graph,
+          facilities: input.facilities,
+          scenario: new Scenario(input.scenario),
+          execution: "worker",
+        });
+        try {
+          run = await simulation.run({ ...input.run, signal: context.signal });
+        } finally {
+          simulation.dispose();
+        }
       }
       if (!run) throw Error("Simulation returned no result");
       const analysis = analyzeRun(run);
@@ -493,8 +505,15 @@ export function defineGrabmStudy(options: GrabmStudyOptions): StudyModel {
         : metrics(analysis, input, run);
       if (context.retainReplay) {
         const resources: Record<string, Uint8Array> = {};
-        const reference = await writeRunDataset(run, {async cleanup() { for (const key of Object.keys(resources)) delete resources[key]; }, async write(key, bytes) {resources[key] = bytes.slice();}});
-        context.retainDataset({...reference, resources});
+        const reference = await writeRunDataset(run, {
+          async cleanup() {
+            for (const key of Object.keys(resources)) delete resources[key];
+          },
+          async write(key, bytes) {
+            resources[key] = bytes.slice();
+          },
+        });
+        context.retainDataset({ ...reference, resources });
       }
       return { metrics: valuesMeasured, warnings: analysis.warnings };
     },

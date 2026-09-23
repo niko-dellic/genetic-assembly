@@ -34,13 +34,13 @@ jobs:
           cache-dependency-path: |
             sdk/package-lock.json
             inspector/package-lock.json
-            grabm-integration/package-lock.json
+            examples/neighborhood/package-lock.json
             package-lock.json
             cli/package-lock.json
             client/package-lock.json
             visualizations/package-lock.json
       - run: npm ci
-      - run: npm run setup
+      - run: npm run setup && npm run examples:install && npm run examples:test
       - run: npm --prefix sdk run build:wasm
       - run: npm test
       - run: npm run build
@@ -59,7 +59,6 @@ jobs:
         with:
           name: genetic-assembly-packages
           path: artifacts/
-
 
   container:
     if: github.event_name == 'workflow_dispatch' && inputs.publish && startsWith(github.ref, 'refs/tags/v')
@@ -94,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [sdk, inspector, cli, client, visualizations, grabm-integration]
+        package: [sdk, inspector, cli, client, visualizations]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

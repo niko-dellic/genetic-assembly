@@ -1,5 +1,5 @@
 import { StudyClient, openArchive } from "@genetic-assembly/sdk";
-import { openGrabmReplay } from "@genetic-assembly/grabm/browser";
+import { openGrabmReplay } from "./example/browser.js";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
@@ -8,7 +8,11 @@ const study = JSON.parse(readFileSync(".genetic-assembly/study.json"));
 const timeout = () => AbortSignal.timeout(120000);
 const baseline = await api.baseline(study.id);
 const baselineStatus = await api.waitJob(baseline.id, timeout());
-assert.equal(baselineStatus.status, "completed", JSON.stringify(baselineStatus));
+assert.equal(
+  baselineStatus.status,
+  "completed",
+  JSON.stringify(baselineStatus),
+);
 const base = (await api.history(baseline.id)).items;
 assert.equal(base.length, 2);
 assert.ok(base[0].metrics.service > 0);
@@ -125,19 +129,65 @@ for (let i = 0; ; i++) {
 }
 await reopen();
 const portable = await openArchive(await run.archive());
-assert.equal(portable.snapshot().provenance.execution,"service");
+assert.equal(portable.snapshot().provenance.execution, "service");
 assert.ok(portable.history(baseline.id).length);
-assert.equal(portable.dataset(datasets[0].id).manifestKey,datasets[0].manifestKey);
-assert.ok(!JSON.stringify(portable.snapshot().provenance).includes("GA_API_TOKEN"));
+assert.equal(
+  portable.dataset(datasets[0].id).manifestKey,
+  datasets[0].manifestKey,
+);
+assert.ok(
+  !JSON.stringify(portable.snapshot().provenance).includes("GA_API_TOKEN"),
+);
 
 assert.equal((await all(run.id)).length, rows.length);
 assert.equal((await run.status()).status, "completed");
 assert.equal((await run.export()).evaluations.length, rows.length);
 console.log("Verified", rows.length, "seed evaluations and durable datasets");
 
-const recovery=await api.run(study.id,{population_size:8,generations:3,seed:987});
-for(let i=0;;i++){const records=await all(recovery.id);if(records.length>0)break;if(i>200)throw Error('Recovery run never evaluated');await new Promise(r=>setTimeout(r,50));}
-execFileSync('docker',['compose','-p',`ga-${JSON.parse(readFileSync('ga.config.json')).project}-v4`,'-f','.genetic-assembly/compose.json','restart','companion'],{stdio:'inherit'});
-for(let i=0;;i++){try{await api.request('/health');break;}catch(e){if(i>100)throw e;await new Promise(r=>setTimeout(r,100));}}
-assert.equal((await recovery.wait(timeout())).status,'completed');const recovered=await all(recovery.id);assert.equal(new Set(recovered.map(r=>r.id)).size,recovered.length);
-const control=await api.run(study.id,{population_size:8,generations:3,seed:987,threads:2});assert.equal((await control.wait(timeout())).status,'completed');assert.deepEqual(normalize(await all(control.id)),normalize(recovered));console.log('Compatible running-job recovery reproduced measurements without duplicate identities');
+const recovery = await api.run(study.id, {
+  population_size: 8,
+  generations: 3,
+  seed: 987,
+});
+for (let i = 0; ; i++) {
+  const records = await all(recovery.id);
+  if (records.length > 0) break;
+  if (i > 200) throw Error("Recovery run never evaluated");
+  await new Promise((r) => setTimeout(r, 50));
+}
+execFileSync(
+  "docker",
+  [
+    "compose",
+    "-p",
+    `ga-${JSON.parse(readFileSync("ga.config.json")).project}-v4`,
+    "-f",
+    ".genetic-assembly/compose.json",
+    "restart",
+    "companion",
+  ],
+  { stdio: "inherit" },
+);
+for (let i = 0; ; i++) {
+  try {
+    await api.request("/health");
+    break;
+  } catch (e) {
+    if (i > 100) throw e;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+assert.equal((await recovery.wait(timeout())).status, "completed");
+const recovered = await all(recovery.id);
+assert.equal(new Set(recovered.map((r) => r.id)).size, recovered.length);
+const control = await api.run(study.id, {
+  population_size: 8,
+  generations: 3,
+  seed: 987,
+  threads: 2,
+});
+assert.equal((await control.wait(timeout())).status, "completed");
+assert.deepEqual(normalize(await all(control.id)), normalize(recovered));
+console.log(
+  "Compatible running-job recovery reproduced measurements without duplicate identities",
+);

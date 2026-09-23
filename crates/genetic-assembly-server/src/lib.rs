@@ -369,7 +369,7 @@ async fn authorize(
     next: Next,
 ) -> Result<Response, StatusCode> {
     if request.method() == axum::http::Method::GET
-        && ["/", "/inspector.js", "/grabm.js", "/health"].contains(&request.uri().path())
+        && ["/", "/inspector.js", "/health"].contains(&request.uri().path())
     {
         return Ok(next.run(request).await);
     }

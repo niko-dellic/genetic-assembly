@@ -1,0 +1,7 @@
+{
+  "execution": "local",
+  "entry": "study.mjs",
+  "files": ["study.mjs", "dist"],
+  "project": "neighborhood-example",
+  "port": 3001
+}

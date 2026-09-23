@@ -11,14 +11,7 @@ import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
-export const packages = [
-  "sdk",
-  "grabm-integration",
-  "inspector",
-  "cli",
-  "client",
-  "visualizations",
-];
+export const packages = ["sdk", "inspector", "cli", "client", "visualizations"];
 const mode = process.argv[2] ?? "check";
 const version = JSON.parse(readFileSync(join(root, "package.json"))).version;
 const output = join(root, "artifacts");

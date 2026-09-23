@@ -34,23 +34,26 @@ For service execution, the CLI includes the companion's build recipe and Rust so
 ## Define a study
 
 ```js
-import { defineStudy } from '@genetic-assembly/sdk'
+import { defineStudy } from "@genetic-assembly/sdk";
 export default defineStudy({
-  name: 'Two targets', version: '1', inputs: {},
-  decisions: { x: { kind: 'real', lower: 0, upper: 1, baseline: 0.5 } },
+  name: "Two targets",
+  version: "1",
+  inputs: {},
+  decisions: { x: { kind: "real", lower: 0, upper: 1, baseline: 0.5 } },
   objectives: {
-    left: { metric: 'left', direction: 'minimize' },
-    right: { metric: 'right', direction: 'minimize' }
+    left: { metric: "left", direction: "minimize" },
+    right: { metric: "right", direction: "minimize" },
   },
-  searchSeeds: [42, 43], validationSeeds: [142, 143],
-  evaluate: ({ x }) => ({ metrics: { left: x*x, right: (1-x)*(1-x) } }),
-  materialize: decisions => decisions
-})
+  searchSeeds: [42, 43],
+  validationSeeds: [142, 143],
+  evaluate: ({ x }) => ({ metrics: { left: x * x, right: (1 - x) * (1 - x) } }),
+  materialize: (decisions) => decisions,
+});
 ```
 
 Named real, integer, boolean and categorical decisions compile internally. All seed-level measurements are retained. Baselines and selected candidates can retain replay datasets; search and validated fronts remain separate. Repair, domain validation, materialization and dataset hooks keep application knowledge out of the solver.
 
-Optional packages provide grabm integration, a mountable inspector, Three.js integration and charts. The grabm reference keeps demand fixed while changing bounded graph choices and optimizes fulfillment, accessibility and a documented cost proxy.
+Optional packages provide a mountable inspector, Three.js integration and charts. Application-specific examples live in `examples/` and can be explored in the [examples dashboard](https://genetic-assembly.vercel.app/docs/examples). The grabm example keeps demand fixed while changing bounded graph choices and optimizes fulfillment, accessibility and a documented cost proxy.
 
 ## Development and checks
 

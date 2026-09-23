@@ -1,4 +1,4 @@
-import { defineGrabmStudy } from "@genetic-assembly/grabm";
+import { defineGrabmStudy } from "./dist/index.js";
 /** Eight residents have fixed shopping demand across a 100-metre walking edge. */
 const input = {
   graph: {

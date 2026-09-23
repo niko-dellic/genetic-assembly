@@ -28,10 +28,7 @@ export async function serveLocalInspector(options: {
         response.end(options.archive ?? (await options.optimizer!.export()));
         return;
       }
-      if (
-        request.method === "GET" &&
-        ["/inspector.js", "/grabm.js"].includes(path)
-      ) {
+      if (request.method === "GET" && path === "/inspector.js") {
         response.setHeader("content-type", "text/javascript");
         response.end(readFileSync(join(options.assets, path.slice(1))));
         return;
@@ -79,13 +76,11 @@ export async function serveLocalInspector(options: {
         response.setHeader("content-type", "text/html; charset=utf-8");
         response.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Genetic Assembly inspector</title></head><body><div id="app"></div><div id="replay"></div><script type="module">
 import {mountInspector,ArchiveInspectorProvider,openArchive} from '/inspector.js';
-import {mountGrabmReplay} from '/grabm.js';
 const provider=new ArchiveInspectorProvider(async()=>openArchive(new Uint8Array(await (await fetch('/archive')).arrayBuffer())));
 const live=${Boolean(options.optimizer)};
 async function action(value){const response=await fetch('/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(value)});const result=await response.json();if(!response.ok)throw Error(result.error);return result;}
 if(live){Object.defineProperty(provider,'readOnly',{value:false});provider.baseline=()=>action({op:'baseline'});provider.run=()=>action({op:'run'});provider.replay=(_,decisions)=>action({op:'replay',decisions});const original=provider.runHandle.bind(provider);provider.runHandle=id=>({...original(id),cancel:()=>action({op:'cancel',id})});}
-let replay;
-mountInspector(document.querySelector('#app'),{provider,onReplay:async dataset=>{replay?.dispose();replay=await mountGrabmReplay(document.querySelector('#replay'),provider.datasetUrl(dataset.id),dataset,provider.resourceFetch);document.querySelector('#replay').scrollIntoView();}});
+mountInspector(document.querySelector('#app'),{provider});
 </script></body></html>`);
         return;
       }

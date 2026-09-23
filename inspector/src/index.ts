@@ -1,5 +1,9 @@
-import type {InspectorProvider} from "./providers.js";
-export {ArchiveInspectorProvider, LocalInspectorProvider, type InspectorProvider} from "./providers.js";
+import type { InspectorProvider } from "./providers.js";
+export {
+  ArchiveInspectorProvider,
+  LocalInspectorProvider,
+  type InspectorProvider,
+} from "./providers.js";
 import {
   StudyClient,
   type PreparedStudy,
@@ -19,16 +23,14 @@ export function mountInspector(
   container: HTMLElement,
   options: InspectorOptions = {},
 ) {
-  const api: InspectorProvider = options.provider ?? new StudyClient(
-    options.baseUrl ?? location.origin,
-    options.token,
-  );
+  const api: InspectorProvider =
+    options.provider ??
+    new StudyClient(options.baseUrl ?? location.origin, options.token);
   let disposed = false;
   let study: PreparedStudy | undefined;
   let runId = "";
   let isJob = false;
   let selected: EvaluationRecord | undefined;
-  let replayView: { dispose(): void } | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   container.innerHTML = `<style>
  .ga-inspector{font:15px/1.5 system-ui;background:#101315;color:#e7eded;min-height:100vh;padding:32px;box-sizing:border-box}.ga-inspector *{box-sizing:border-box}.ga-inspector h1{font-size:28px;margin:0}.ga-inspector h2{font-size:19px}.ga-inspector button,.ga-inspector select,.ga-inspector input{background:#22292c;color:inherit;border:1px solid #485558;border-radius:6px;padding:8px;margin:4px}.ga-inspector button{cursor:pointer}.ga-inspector button:disabled{opacity:.4}.ga-inspector table{width:100%;border-collapse:collapse}.ga-inspector td,.ga-inspector th{text-align:left;padding:9px;border-bottom:1px solid #394346}.ga-inspector pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#191f21;padding:16px}.ga-inspector .muted{color:#afbdc1}.ga-inspector .error{color:#ff9b92}.ga-inspector .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.ga-inspector .panel{margin:20px 0;border:1px solid #394346;padding:16px;border-radius:8px;overflow:auto}.ga-inspector svg{width:100%;max-width:700px;height:260px}.ga-inspector a{color:#acdcce}@media(max-width:600px){.ga-inspector{padding:12px}.ga-inspector table{font-size:12px}}
@@ -41,7 +43,10 @@ export function mountInspector(
   function button(label: string, action: () => unknown) {
     const element = document.createElement("button");
     element.textContent = label;
-    if (label === "Open replay" && api.resourceFetch && !options.onReplay) { element.disabled = true; element.title = "Provide an application replay viewer through onReplay"; }
+    if (label === "Open replay" && !options.onReplay) {
+      element.disabled = true;
+      element.title = "Provide an application replay viewer through onReplay";
+    }
     element.onclick = () => {
       Promise.resolve().then(action).catch(error);
     };
@@ -145,37 +150,25 @@ export function mountInspector(
       a.target = "_blank";
       if (api.resourceFetch) {
         a.textContent = "Download dataset manifest";
-        a.onclick = event => {
+        a.onclick = (event) => {
           event.preventDefault();
-          api.resourceFetch!(a.href).then(response => response.blob()).then(blob => {
-            const url = URL.createObjectURL(blob), download = document.createElement("a");
-            download.href = url; download.download = "manifest.json"; download.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-          }).catch(error);
+          api.resourceFetch!(a.href)
+            .then((response) => response.blob())
+            .then((blob) => {
+              const url = URL.createObjectURL(blob),
+                download = document.createElement("a");
+              download.href = url;
+              download.download = "manifest.json";
+              download.click();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            })
+            .catch(error);
         };
       }
       p.append(a);
       p.append(
         button("Open replay", async () => {
           if (options.onReplay) return options.onReplay(dataset);
-          replayView?.dispose();
-          const viewer = document.createElement("div");
-          target.append(viewer);
-          if (api.resourceFetch) throw Error("Provide onReplay to open this dataset with your application’s replay viewer.");
-          const module = await import(
-            /* @vite-ignore */ api.baseUrl + "/grabm.js"
-          );
-          replayView = await module.mountGrabmReplay(
-            viewer,
-            api.datasetUrl(dataset.id),
-            dataset,
-            (input: RequestInfo | URL, init: RequestInit = {}) => {
-              const headers = new Headers(init.headers);
-              if (options.token)
-                headers.set("authorization", `Bearer ${options.token}`);
-              return (api.resourceFetch ?? fetch)(input, { ...init, headers });
-            },
-          );
         }),
       );
       target.append(p);
@@ -378,7 +371,6 @@ export function mountInspector(
       study = await api.study(find<HTMLSelectElement>("[data-studies]").value);
       runId = "";
       selected = undefined;
-      replayView?.dispose();
       text(find("[data-selected]"), "Select a measured candidate.");
       find("[data-comparison]").replaceChildren();
       await loadStudy();
@@ -449,19 +441,24 @@ export function mountInspector(
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
-  if (api.readOnly) for (const selector of ["[data-baseline]", "[data-run]", "[data-replay]", "[data-cancel]"]) {
-    find<HTMLButtonElement>(selector).disabled = true;
-    find(selector).title = "Read-only archive: original model required";
-  }
+  if (api.readOnly)
+    for (const selector of [
+      "[data-baseline]",
+      "[data-run]",
+      "[data-replay]",
+      "[data-cancel]",
+    ]) {
+      find<HTMLButtonElement>(selector).disabled = true;
+      find(selector).title = "Read-only archive: original model required";
+    }
   loadStudies().catch(error);
   return {
     refresh: loadStudies,
     dispose() {
       disposed = true;
       clearTimeout(timer);
-      replayView?.dispose();
       container.replaceChildren();
     },
   };
 }
-export {openArchive} from '@genetic-assembly/sdk';
+export { openArchive } from "@genetic-assembly/sdk";
