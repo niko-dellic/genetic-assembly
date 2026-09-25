@@ -40,7 +40,7 @@ The SDK wraps these routes. Study preparation registers a serializable specifica
 | `GET /v3/studies/{id}/runs`             | Paginated experiment statuses                                                                     |
 | `GET /v3/runs/{id}`                     | Current status, configuration, generation and error                                               |
 | `POST /v3/runs/{id}/cancel`             | Request cancellation; returns updated status                                                      |
-| `GET /v3/runs/{id}/results`             | `search`, all `validated` finalists, and `validatedFront`                                                         |
+| `GET /v3/runs/{id}/results`             | `search`, all `validated` finalists, and `validatedFront`                                         |
 | `GET /v3/runs/{id}/analytics`           | Generation summaries and original search analytics                                                |
 | `GET /v3/runs/{id}/export`              | Study provenance, results, seed evaluations and dataset references                                |
 | `GET /v3/history/{id}`                  | Owner history; filters `phase`, `status`, `candidateId`, and `offset`                             |
@@ -65,3 +65,5 @@ Paginated responses contain `items` and `nextOffset`; stop at `null`. Results fo
 `GET /v3/operations/{id}/generations?offset={offset}` returns `{items, nextOffset}` with up to 50 committed generation snapshots. Each snapshot references actual surviving candidate IDs, their ranks and crowding distances, the population front, and a separate cumulative discovered front. Baseline/replay operations have an empty generation history.
 
 Terminal events commit with terminal status. Each generation's snapshot, completion event, and recovery checkpoint commit together. Disconnecting observation leaves durable work running; cancellation is a separate explicit request.
+
+Study run requests accept `validate` (default `true`); `false` skips finalist validation. This execution policy is stored with the run and preserved across recovery. History and generation endpoints accept `offset` and `limit` (default 50, bounded to 1–1,000).

@@ -221,14 +221,20 @@ try {
   );
   writeFileSync(
     join(directory, "main.mjs"),
-    `import {Optimizer,openArchive,defineWorkerStudy} from '@genetic-assembly/sdk'; import original from './study.mjs'; import EvaluationWorker from './evaluation.mjs?worker'; const study=defineWorkerStudy(original,()=>new EvaluationWorker(),{repair:original.repair,validate:original.validate,materialize:original.materialize}); import SolverWorker from '@genetic-assembly/sdk/solver-worker?worker';
+    `import {Optimizer,openArchive,defineWorkerStudy} from '@genetic-assembly/sdk'; import SolverWorker from '@genetic-assembly/sdk/solver-worker?worker'; import original from './study.mjs'; const study=defineWorkerStudy(original,()=>new Worker(new URL('./evaluation.mjs',import.meta.url),{type:'module'}),{repair:original.repair,validate:original.validate,materialize:original.materialize});
     const optimizer=new Optimizer({solverWorkerFactory:()=>new SolverWorker()}); try{await (await optimizer.baseline(study)).completed();const run=await optimizer.run(study,{populationSize:4,generations:1,seed:42});await run.wait();const selected=(await run.results()).validatedFront[0];await (await optimizer.replay(study,selected.decisions)).completed();const archive=await openArchive(await optimizer.export());window.acceptance={records:archive.history().length,datasets:Object.keys(archive.snapshot().datasets).length};}catch(error){window.acceptance={error:String(error),detail:error.detail}}finally{optimizer.dispose()}`,
   );
-  writeFileSync(join(directory,"evaluation.mjs"), "import {serveEvaluator} from '@genetic-assembly/sdk'; import study from './study.mjs';serveEvaluator(study.evaluate);");
+  writeFileSync(
+    join(directory, "evaluation.mjs"),
+    "import {serveEvaluator} from '@genetic-assembly/sdk'; import study from './study.mjs';serveEvaluator(study.evaluate);",
+  );
   run("npx", ["--no-install", "vite", "build"]);
   const server = createServer((req, res) => {
     try {
-      const path = new URL(req.url, "http://localhost").pathname.replace(/^\/runtime/, "");
+      const path = new URL(req.url, "http://localhost").pathname.replace(
+        /^\/runtime/,
+        "",
+      );
       const file = join(directory, "site", path === "/" ? "index.html" : path);
       res.setHeader(
         "content-type",
@@ -254,30 +260,50 @@ try {
     assert(!result.error, result.error);
     assert(result.records > 0);
     assert.equal(result.datasets, 4);
-    await page.route('**/*.wasm', route => route.fulfill({status:404,body:'Missing binary'}));
+    await page.route("**/*.wasm", (route) =>
+      route.fulfill({ status: 404, body: "Missing binary" }),
+    );
     await page.reload();
-    await page.waitForFunction(() => window.acceptance, {}, {timeout:60000});
+    await page.waitForFunction(() => window.acceptance, {}, { timeout: 60000 });
     const failure = await page.evaluate(() => window.acceptance);
-    assert.equal(failure.detail.code, 'WASM_LOAD');
-    assert.equal(failure.detail.stage, 'wasm-loading');
+    assert.equal(failure.detail.code, "WASM_LOAD");
+    assert.equal(failure.detail.stage, "wasm-loading");
     assert.match(failure.detail.asset, /\/runtime\/assets\/.*\.wasm$/);
-    await page.unroute('**/*.wasm');
-    await page.route('**/solver-browser-worker-*.js', route => route.fulfill({status:404,body:'Missing worker'}));
+    await page.unroute("**/*.wasm");
+    await page.route("**/solver-browser-worker-*.js", (route) =>
+      route.fulfill({ status: 404, body: "Missing worker" }),
+    );
     await page.reload();
-    await page.waitForFunction(() => window.acceptance, {}, {timeout:60000});
-    assert.equal((await page.evaluate(() => window.acceptance)).detail.code, 'WORKER_FAILED');
-    await page.unroute('**/solver-browser-worker-*.js');
-    const vite = await import(pathToFileURL(join(directory,'node_modules/vite/dist/node/index.js')).href);
-    const dev = await vite.createServer({root:directory,server:{host:'127.0.0.1',port:0}});
+    await page.waitForFunction(() => window.acceptance, {}, { timeout: 60000 });
+    assert.equal(
+      (await page.evaluate(() => window.acceptance)).detail.code,
+      "WORKER_FAILED",
+    );
+    await page.unroute("**/solver-browser-worker-*.js");
+    const vite = await import(
+      pathToFileURL(join(directory, "node_modules/vite/dist/node/index.js"))
+        .href
+    );
+    const dev = await vite.createServer({
+      root: directory,
+      server: { host: "127.0.0.1", port: 0 },
+    });
     try {
       await dev.listen();
-      await page.goto(`http://127.0.0.1:${dev.httpServer.address().port}/runtime/`);
-      await page.waitForFunction(() => window.acceptance, {}, {timeout:60000});
+      await page.goto(
+        `http://127.0.0.1:${dev.httpServer.address().port}/runtime/`,
+      );
+      await page.waitForFunction(
+        () => window.acceptance,
+        {},
+        { timeout: 60000 },
+      );
       const development = await page.evaluate(() => window.acceptance);
       assert(!development.error, development.error);
-      assert.equal(development.datasets,4);
-    } finally {await dev.close();}
-
+      assert.equal(development.datasets, 4);
+    } finally {
+      await dev.close();
+    }
   } finally {
     await browser?.close();
     await new Promise((resolve) => server.close(resolve));

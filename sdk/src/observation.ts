@@ -116,12 +116,23 @@ export interface PageOptions {
   offset?: number;
   limit?: number;
 }
+/** @internal */
+export function pageOptions(options: PageOptions = {}): Required<PageOptions> {
+  if (
+    !Number.isFinite(options.offset ?? 0) ||
+    !Number.isFinite(options.limit ?? 50)
+  )
+    throw Error("Pagination values must be finite");
+  return {
+    offset: Math.max(0, Math.floor(options.offset ?? 0)),
+    limit: Math.max(1, Math.min(1000, Math.floor(options.limit ?? 50))),
+  };
+}
 export function page<T>(
   items: readonly T[],
   options: PageOptions = {},
 ): HistoryPage<T> {
-  const offset = Math.max(0, Math.floor(options.offset ?? 0)),
-    limit = Math.max(1, Math.min(1000, Math.floor(options.limit ?? 50)));
+  const { offset, limit } = pageOptions(options);
   return structuredClone({
     items: items.slice(offset, offset + limit),
     nextOffset: offset + limit < items.length ? offset + limit : null,
@@ -143,7 +154,7 @@ export async function collectPages<T>(
 /** Aggregate complete seed records without requiring applications to reconstruct candidates. */
 export function aggregateCandidates(
   records: import("./contracts.js").EvaluationRecord[],
-): import("./local.js").CandidateResult[] {
+): import("./operation.js").CandidateResult[] {
   const groups = new Map<string, typeof records>();
   for (const record of records) {
     const group = groups.get(record.candidateId) ?? [];

@@ -450,6 +450,9 @@ async fn create_run(
     };
     validate_problem_config(&problem, &request.config)
         .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+    let mut config =
+        serde_json::to_value(&request.config).map_err(|e| ApiError::Internal(e.to_string()))?;
+    config["validate"] = json!(request.validate);
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO runs(id,scene_revision_id,evaluator_revision_id,problem_revision_id,adapter_revision_id,status,config) VALUES($1,$2,$3,$4,$5,'queued',$6)")
         .bind(id)
@@ -457,7 +460,7 @@ async fn create_run(
         .bind(request.evaluator_revision_id)
         .bind(request.problem_revision_id)
         .bind(request.adapter_revision_id)
-        .bind(serde_json::to_value(request.config).map_err(|e| ApiError::Internal(e.to_string()))?)
+        .bind(config)
         .execute(&state.db).await?;
     let response = fetch_run(&state.db, id).await?;
     emit_event(

@@ -1,16 +1,22 @@
 import { exportMemory } from "./archive.js";
 import { StudyClient, type RunHandle, type JobHandle } from "./index.js";
-import type { Decisions, Job, PreparedStudy } from "./contracts.js";
-import type { StudyModel } from "./model.js";
 import {
-  LocalRuntime,
+  concurrencyOption,
+  runOptions,
+  type RunOptions,
   type CandidateResult,
-  type LocalRunHandle,
-  type LocalRunOptions,
-} from "./local.js";
+} from "./operation.js";
+import type { Decisions, PreparedStudy } from "./contracts.js";
+import type { StudyModel } from "./model.js";
+import { LocalRuntime, type LocalRunHandle } from "./local.js";
 export type Execution = "local" | "service";
 export type OptimizerOptions<M extends Execution> = M extends "service"
-  ? { execution: "service"; url: string; token?: string }
+  ? {
+      execution: "service";
+      url: string;
+      token?: string;
+      evaluationConcurrency?: number;
+    }
   : {
       execution?: "local";
       storage?: "memory";
@@ -26,6 +32,7 @@ export class Optimizer<M extends Execution = "local"> {
   private local?: LocalRuntime;
   private client?: StudyClient;
   private disposed = false;
+  private defaultConcurrency: number;
   private observation = new AbortController();
   constructor(
     options: OptimizerOptions<M> & {
@@ -33,6 +40,7 @@ export class Optimizer<M extends Execution = "local"> {
     } = {} as OptimizerOptions<M> & { execution?: M },
   ) {
     const settings: OptimizerOptions<Execution> = options;
+    this.defaultConcurrency = concurrencyOption(settings.evaluationConcurrency);
     if (
       settings.execution &&
       !["local", "service"].includes(settings.execution)
@@ -74,9 +82,10 @@ export class Optimizer<M extends Execution = "local"> {
   }
   async run(
     study: Model<M>,
-    options: LocalRunOptions = {},
+    options: RunOptions = {},
   ): Promise<M extends "service" ? RunHandle : LocalRunHandle> {
     this.assertOpen();
+    options = runOptions(options, this.defaultConcurrency);
     return (
       this.client
         ? this.client.run(this.prepared(study), {
@@ -84,6 +93,7 @@ export class Optimizer<M extends Execution = "local"> {
             generations: options.generations,
             seed: options.seed,
             threads: options.evaluationConcurrency,
+            validate: options.validate,
           })
         : this.local!.run(study as StudyModel, options)
     ) as any;
@@ -108,11 +118,12 @@ export class Optimizer<M extends Execution = "local"> {
       throw Error("Use the service run handle for paginated history");
     return this.local.store.history(ownerId);
   }
-  runHandle(id: string) {
+  runHandle(id: string): M extends "service" ? RunHandle : LocalRunHandle<any> {
     this.assertOpen();
+    if (this.client) return this.client.runHandle(id) as any;
     const run = this.local?.runs.get(id);
     if (!run) throw Error("Unknown local run");
-    return run;
+    return run as any;
   }
   dataset(id: string) {
     this.assertOpen();

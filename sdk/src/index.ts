@@ -1,7 +1,26 @@
+import { observe } from "./operation.js";
+import type {
+  OptimizationHandle,
+  OperationHandle,
+  OperationStatus,
+  HistoryOptions,
+  OptimizationResults,
+  CandidateResult,
+} from "./operation.js";
+export type {
+  OptimizationHandle,
+  OperationHandle,
+  OperationStatus,
+  HistoryOptions,
+  OptimizationResults,
+  CandidateResult,
+  RunOptions,
+} from "./operation.js";
 import {
   collectPages,
   aggregateCandidates,
   page,
+  pageOptions,
   type PageOptions,
   type GenerationSnapshot,
   type OperationEvent,
@@ -116,13 +135,9 @@ export class StudyClient {
   }
   history(
     ownerId: string,
-    options: {
-      offset?: number;
-      phase?: string;
-      status?: string;
-      candidateId?: string;
-    } = {},
+    options: HistoryOptions = {},
   ): Promise<Page<EvaluationRecord>> {
+    options = { ...options, ...pageOptions(options) };
     return this.request(
       `/v3/history/${ownerId}?` +
         new URLSearchParams(
@@ -193,27 +208,40 @@ const delay = (signal?: AbortSignal) =>
     if (signal?.aborted) abort();
   });
 /** Durable run handle; stopping observation is separate from cancelling computation. */
-export class RunHandle {
+export class RunHandle implements OptimizationHandle {
   constructor(
     protected client: StudyClient,
     public id: string,
     protected observationSignal?: AbortSignal,
   ) {}
-  async status(): Promise<RunStatus> {
+  async status(): Promise<OperationStatus> {
     const state = await this.client.request<RunStatus>(`/v3/runs/${this.id}`);
     if (state.status === "failed")
       state.errorDetail =
         (await this.history({ status: "failed" })).items.find(
           (record) => record.errorDetail,
         )?.errorDetail ?? errorDetail(state.error, "service");
-    return state;
+    const snapshot = (
+      await this.generations({
+        offset: Math.max(0, state.current_generation),
+        limit: 1,
+      })
+    ).items[0];
+    return {
+      id: state.id,
+      status: state.status,
+      ...(state.error ? { error: state.error } : {}),
+      ...(state.errorDetail ? { errorDetail: state.errorDetail } : {}),
+      ...(snapshot ? { progress: snapshot.summary } : {}),
+    };
   }
-  cancel(): Promise<RunStatus> {
-    return this.client.request(`/v3/runs/${this.id}/cancel`, {
+  async cancel(): Promise<OperationStatus> {
+    await this.client.request(`/v3/runs/${this.id}/cancel`, {
       method: "POST",
     });
+    return this.status();
   }
-  async wait(signal?: AbortSignal): Promise<RunStatus> {
+  async wait(signal?: AbortSignal): Promise<OperationStatus> {
     signal = AbortSignal.any(
       [signal, this.observationSignal].filter(
         (value): value is AbortSignal => !!value,
@@ -221,7 +249,7 @@ export class RunHandle {
     );
     for (;;) {
       signal?.throwIfAborted();
-      const status = await this.status();
+      const status = await observe(this.status(), signal);
       if (status.status === "failed")
         throw new OptimizationError(
           status.errorDetail ?? errorDetail(status.error, "service"),
@@ -233,13 +261,16 @@ export class RunHandle {
   history(options: Parameters<StudyClient["history"]>[1] = {}) {
     return this.client.history(this.id, options);
   }
-  results(): Promise<import("./local.js").LocalResults> {
+  results(): Promise<import("./operation.js").OptimizationResults> {
     return this.client.request(`/v3/runs/${this.id}/results`);
   }
   generations(options: PageOptions = {}) {
+    options = pageOptions(options);
     return this.client.request<
       import("./observation.js").HistoryPage<GenerationSnapshot>
-    >(`/v3/operations/${this.id}/generations?offset=${options.offset ?? 0}`);
+    >(
+      `/v3/operations/${this.id}/generations?offset=${options.offset ?? 0}&limit=${options.limit ?? 50}`,
+    );
   }
   async candidates(
     options: PageOptions & { phase?: string; generation?: number } = {},
@@ -263,7 +294,8 @@ export class RunHandle {
     return page(
       aggregateCandidates(records).filter(
         (candidate) =>
-          (options.phase ?? "search") !== "search" ||
+          ((options.phase ?? "search") !== "search" &&
+            options.generation === undefined) ||
           ids.has(candidate.candidateId),
       ),
       options,
@@ -309,8 +341,8 @@ export class RunHandle {
       }
     }
   }
-  async completed() {
-    await this.wait();
+  async completed(signal?: AbortSignal) {
+    await this.wait(signal);
     return this.results();
   }
   analytics(): Promise<unknown> {
@@ -324,7 +356,7 @@ export class RunHandle {
   export(): Promise<unknown> {
     return this.client.request(`/v3/runs/${this.id}/export`);
   }
-  async *progress(signal?: AbortSignal): AsyncGenerator<RunStatus> {
+  async *progress(signal?: AbortSignal): AsyncGenerator<OperationStatus> {
     signal = AbortSignal.any(
       [signal, this.observationSignal].filter(
         (value): value is AbortSignal => !!value,
@@ -332,14 +364,14 @@ export class RunHandle {
     );
     for (;;) {
       signal?.throwIfAborted();
-      const status = await this.status();
+      const status = await observe(this.status(), signal);
       yield status;
       if (["completed", "failed", "cancelled"].includes(status.status)) return;
       await delay(signal);
     }
   }
 }
-export class JobHandle {
+export class JobHandle implements OperationHandle<CandidateResult> {
   private observation: RunHandle;
   constructor(
     private client: StudyClient,
@@ -348,23 +380,41 @@ export class JobHandle {
   ) {
     this.observation = new RunHandle(client, id, signal);
   }
-  async status() {
-    return this.client.job(this.id);
+  async status(): Promise<OperationStatus> {
+    const state = await this.client.job(this.id);
+    const detail =
+      state.status === "failed"
+        ? ((await this.history({ status: "failed" })).items.find(
+            (r) => r.errorDetail,
+          )?.errorDetail ?? errorDetail(state.error, "service"))
+        : undefined;
+    return {
+      id: state.id,
+      status: state.status,
+      ...(state.error ? { error: state.error } : {}),
+      ...(detail ? { errorDetail: detail } : {}),
+    };
   }
   async cancel() {
-    return this.client.cancelJob(this.id);
+    await this.client.cancelJob(this.id);
+    return this.status();
   }
   async wait(signal?: AbortSignal) {
-    const status = await this.client.waitJob(
-      this.id,
-      AbortSignal.any(
-        [signal, this.signal].filter((s): s is AbortSignal => !!s),
-      ),
+    signal = AbortSignal.any(
+      [signal, this.signal].filter((s): s is AbortSignal => !!s),
     );
-    if (status.status === "failed")
-      throw new OptimizationError(errorDetail(status.error, "service"));
-    return status;
+    for (;;) {
+      signal.throwIfAborted();
+      const status = await observe(this.status(), signal);
+      if (status.status === "failed")
+        throw new OptimizationError(
+          status.errorDetail ?? errorDetail(status.error, "service"),
+        );
+      if (["completed", "cancelled"].includes(status.status)) return status;
+      await delay(signal);
+    }
   }
+
   async results() {
     if ((await this.status()).status !== "completed")
       throw Error("Results are not available");
@@ -373,11 +423,11 @@ export class JobHandle {
     if (!values.length) throw Error("Results are not available");
     return values[0];
   }
-  async completed() {
-    await this.wait();
+  async completed(signal?: AbortSignal) {
+    await this.wait(signal);
     return this.results();
   }
-  history(options: PageOptions = {}) {
+  history(options: HistoryOptions = {}) {
     return this.client.history(this.id, options);
   }
   generations(options: PageOptions = {}) {
@@ -403,7 +453,7 @@ export class JobHandle {
         )
       )
         return;
-      const status = await this.status();
+      const status = await observe(this.status(), options.signal);
       if (
         ["completed", "failed", "cancelled"].includes(status.status) &&
         result.items.length < 1000
@@ -427,13 +477,7 @@ export {
   type EvaluationContext,
   type ReplayDataset,
 } from "./model.js";
-export {
-  LocalRunHandle,
-  type LocalRunOptions,
-  type LocalResults,
-  type LocalStatus,
-  type CandidateResult,
-} from "./local.js";
+export { LocalRunHandle } from "./local.js";
 export { RetainedDataLimitError } from "./memory.js";
 
 export {

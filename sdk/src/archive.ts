@@ -251,7 +251,7 @@ export async function exportServiceArchive(
   const status = await handle.status();
   const source = (await handle.export()) as {
     study: import("./contracts.js").PreparedStudy;
-    results: import("./local.js").LocalResults | null;
+    results: import("./operation.js").OptimizationResults | null;
     materializations: {
       individual: import("./solver.js").SolverIndividual;
       materialization?: { data: unknown };

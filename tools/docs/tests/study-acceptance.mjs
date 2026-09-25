@@ -52,22 +52,78 @@ assert.equal((await run.wait(timeout())).status, "completed");
 const rows = await all(run.id);
 assert.ok(rows.some((r) => r.phase === "validation"));
 const result = await run.results();
-const detachedOptimizer = new Optimizer({execution:'service',url:api.baseUrl});
-const detached = await detachedOptimizer.run(study,{populationSize:4,generations:1});
+const detachedOptimizer = new Optimizer({
+  execution: "service",
+  url: api.baseUrl,
+});
+const detached = await detachedOptimizer.run(study, {
+  populationSize: 4,
+  generations: 1,
+});
 detachedOptimizer.dispose();
 await assert.rejects(detached.wait(), /disposed|abort/i);
-assert.equal((await api.runHandle(detached.id).wait(timeout())).status,'completed');
+assert.equal(
+  (await api.runHandle(detached.id).wait(timeout())).status,
+  "completed",
+);
+const shared = new Optimizer({
+  execution: "service",
+  url: api.baseUrl,
+  evaluationConcurrency: 2,
+});
+const unvalidated = await shared.run(study, {
+  populationSize: 4,
+  generations: 1,
+  validate: false,
+});
+const unvalidatedStatus = await unvalidated.wait(timeout());
+assert.equal(unvalidatedStatus.status, "completed");
+assert.equal(unvalidatedStatus.progress.generation, 1);
+assert.equal((await unvalidated.results()).validated.length, 0);
+assert.equal(
+  (await unvalidated.history({ phase: "validation", limit: 1 })).items.length,
+  0,
+);
+const one = await unvalidated.history({ phase: "search", limit: 1 });
+assert.equal(one.items.length, 1);
+assert.equal(one.nextOffset, 1);
+assert.equal(
+  (await unvalidated.history({ candidateId: one.items[0].candidateId })).items
+    .length,
+  2,
+);
+assert.equal(
+  (await unvalidated.generations({ offset: 1, limit: 1 })).nextOffset,
+  null,
+);
+assert.equal(
+  (await shared.runHandle(unvalidated.id).status()).status,
+  "completed",
+);
+assert.equal(
+  (await api.request(`/v3/runs/${unvalidated.id}`)).config.threads,
+  2,
+);
+assert.deepEqual(await unvalidated.cancel(), unvalidatedStatus);
+assert.deepEqual(Object.keys(await baseline.status()).sort(), ["id", "status"]);
+shared.dispose();
 assert.ok(result.search.pareto_front.length);
 assert.ok(result.validated.length);
 const observed = await Array.fromAsync(run.events());
-assert.equal(observed.at(-1).type,'completed');
-assert.equal(new Set(observed.map(e=>e.sequence)).size,observed.length);
-const cursor = observed[Math.floor(observed.length/2)].sequence;
-assert.deepEqual(await Array.fromAsync(run.events({after:cursor})), observed.filter(e=>e.sequence>cursor));
+assert.equal(observed.at(-1).type, "completed");
+assert.equal(new Set(observed.map((e) => e.sequence)).size, observed.length);
+const cursor = observed[Math.floor(observed.length / 2)].sequence;
+assert.deepEqual(
+  await Array.fromAsync(run.events({ after: cursor })),
+  observed.filter((e) => e.sequence > cursor),
+);
 const snapshots = (await run.generations()).items;
-assert.equal(snapshots.length,3);
-assert.deepEqual(snapshots.at(-1).population.map(c=>c.candidateId),result.search.final_population.map(c=>String(c.id)));
-assert(observed.some(e=>e.type==='evaluation-started'));
+assert.equal(snapshots.length, 3);
+assert.deepEqual(
+  snapshots.at(-1).population.map((c) => c.candidateId),
+  result.search.final_population.map((c) => String(c.id)),
+);
+assert(observed.some((e) => e.type === "evaluation-started"));
 
 assert.ok(
   rows
@@ -199,11 +255,17 @@ console.log("Waiting for the executor lease to expire and the run to recover");
 assert.equal((await recovery.wait(recoveryTimeout)).status, "completed");
 const recovered = await all(recovery.id);
 assert.equal(new Set(recovered.map((r) => r.id)).size, recovered.length);
-const recoveredSnapshots=(await recovery.generations()).items;
-assert.deepEqual(recoveredSnapshots.map(s=>s.generation),[0,1,2,3]);
-const recoveredEvents=await Array.fromAsync(recovery.events());
-assert.equal(recoveredEvents.filter(e=>e.type==='generation-completed').length,4);
-assert.equal(recoveredEvents.filter(e=>e.type==='completed').length,1);
+const recoveredSnapshots = (await recovery.generations()).items;
+assert.deepEqual(
+  recoveredSnapshots.map((s) => s.generation),
+  [0, 1, 2, 3],
+);
+const recoveredEvents = await Array.fromAsync(recovery.events());
+assert.equal(
+  recoveredEvents.filter((e) => e.type === "generation-completed").length,
+  4,
+);
+assert.equal(recoveredEvents.filter((e) => e.type === "completed").length, 1);
 const control = await api.run(study.id, {
   population_size: 8,
   generations: 3,

@@ -612,7 +612,7 @@ async function main() {
       });
       for await (const status of run.progress())
         console.log(
-          `${status.status}: generation ${status.current_generation}`,
+          `${status.status}: generation ${status.progress?.generation ?? "pending"}`,
         );
       const status = await run.status();
       if (status.status !== "completed")

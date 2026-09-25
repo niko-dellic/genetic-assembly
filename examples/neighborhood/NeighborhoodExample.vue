@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount } from "vue";
-import EvaluationWorker from "./evaluation.worker.ts?worker";
 import SolverWorker from "../../sdk/dist/solver-browser-worker.js?worker";
+import { ref, onBeforeUnmount } from "vue";
 const state = ref("Ready"),
   error = ref(""),
   running = ref(false),
@@ -53,11 +52,18 @@ async function start() {
       memoryLimitBytes: 64 * 1024 * 1024,
       solverWorkerFactory: () => new SolverWorker(),
     });
-    model = defineWorkerStudy(study, () => new EvaluationWorker(), {
-      repair: study.repair,
-      validate: study.validate,
-      materialize: study.materialize,
-    });
+    model = defineWorkerStudy(
+      study,
+      () =>
+        new Worker(new URL("./evaluation.worker.ts", import.meta.url), {
+          type: "module",
+        }),
+      {
+        repair: study.repair,
+        validate: study.validate,
+        materialize: study.materialize,
+      },
+    );
     state.value = "Evaluating baseline (2 simulation seeds)…";
     baseline.value = await (await optimizer.baseline(model)).completed();
     canExport.value = true;

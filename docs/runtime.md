@@ -6,19 +6,19 @@ Version 0.5.0 is a breaking release. Install all Genetic Assembly packages at 0.
 
 `await optimizer.baseline(study)`, `await optimizer.run(study, options)`, and `await optimizer.replay(study, decisions)` return operation handles. Creating a handle does not mean execution has completed. Use `await handle.wait()` for terminal status or `await handle.completed()` for results. `wait()` throws a structured error on failure; cancellation returns a cancelled status. `results()` requires available results.
 
-Every handle exposes asynchronous `status()`, `history({offset})`, `generations({offset})`, `cancel()`, `wait()`, and `events({after, signal})`. Baseline and replay have no generation snapshots. Local handles additionally offer a guarded status callback through `subscribe`; throwing from a callback never changes execution.
+Every handle implements `OperationHandle<T>`: asynchronous `status()`, `history({offset, limit, phase, status, candidateId})`, `generations({offset, limit})`, `cancel()`, `wait(signal?)`, `completed(signal?)`, `results()`, and `events({after, signal})`. Status and cancellation return the same `OperationStatus` shape in both modes, with optional completed-generation progress and structured failure details. Cancellation requests a stop; use `wait()` to observe completion. Aborting a wait only stops observation. `OptimizationHandle` extends the common contract with candidate aggregates for searches. Baseline and replay have no generation snapshots. Local handles additionally offer a guarded status callback through `subscribe`; throwing from a callback never changes execution.
 
 ```ts
-const run = await optimizer.run(study, {populationSize: 24, generations: 12})
-let cursor = 0
-for await (const event of run.events({after: cursor})) {
-  cursor = event.sequence
-  if (event.type === 'generation-completed') {
-    const snapshots = await run.generations()
-    console.log(snapshots.items)
+const run = await optimizer.run(study, { populationSize: 24, generations: 12 });
+let cursor = 0;
+for await (const event of run.events({ after: cursor })) {
+  cursor = event.sequence;
+  if (event.type === "generation-completed") {
+    const snapshots = await run.generations();
+    console.log(snapshots.items);
   }
 }
-const results = await run.completed()
+const results = await run.completed();
 ```
 
 Persist the last processed sequence if a service observer must reconnect. Cursors are opaque monotonically increasing numbers, not array indexes; gaps are permitted. Local streams replay retained events before following execution. Aborting a stream disconnects that observer. It does not cancel the operation. Call `cancel()` explicitly to cancel work.
@@ -27,16 +27,19 @@ Events identify the operation, phase, candidate, simulation seed, and retained e
 
 ## Browser packaging
 
-The supported explicit Vite setup works with dependency prebundling enabled, development servers, production assets, and non-root deployment bases:
+The SDK core has no Vite dependency. `solverWorkerFactory` accepts a worker created by the application's bundler or asset setup. Node automatically uses the packaged worker. In a Vite application, use its explicit worker import to preserve relative WASM resolution through dependency prebundling:
 
 ```ts
-import {Optimizer} from '@genetic-assembly/sdk'
-import SolverWorker from '@genetic-assembly/sdk/solver-worker?worker'
+import { Optimizer } from "@genetic-assembly/sdk";
+// Vite application adapter, not a core SDK requirement.
+import SolverWorker from "@genetic-assembly/sdk/solver-worker?worker";
 const optimizer = new Optimizer({
   solverWorkerFactory: () => new SolverWorker(),
   evaluationConcurrency: 4,
-})
+});
 ```
+
+Other bundlers can create a module worker from the public entry using their own asset conventions. A plain app-owned worker that imports the SDK worker can still be prebundled by Vite, relocating its relative WASM URL; do not substitute that wrapper for the explicit import without controlling asset resolution. The explicit Vite recipe is tested in development, production, and under a non-root base path.
 
 Ship the emitted worker and WASM files. `/solver-worker` and `/solver.wasm` are supported package exports. A custom `solverWorkerFactory` owns worker creation; the SDK owns the returned worker's lifetime. Node automatically uses its packaged worker and WASM file. For an application using the default relative worker factory instead, merge `geneticAssemblyVite()` from `@genetic-assembly/sdk/vite` into the Vite configuration; this keeps that entry out of development prebundling.
 
@@ -52,7 +55,7 @@ Prepared companion modules use persistent slots through the CLI-generated worker
 
 ## History and evidence
 
-`generations()` returns exact Rust solver survivors, ranks, crowding distances, population Pareto IDs, and a separate cumulative discovered Pareto front. `candidates({generation, phase})` returns aggregate evidence; `history()` returns individual seed measurements. Use `collectPages` for more than one page. Snapshots refer to candidate IDs; seed evidence is retained once. Search evidence is never replaced by validation evidence. `results().validated` includes all evaluated finalists; `validatedFront` contains the feasible independent validation front.
+`generations()` returns exact Rust solver survivors, ranks, crowding distances, population Pareto IDs, and a separate cumulative discovered Pareto front. `candidates({generation, phase})` returns aggregate evidence; search candidates are limited to completed generations so partial batches do not enter the discovered history; `history()` returns individual seed measurements. Use `collectPages` for more than one page. Snapshots refer to candidate IDs; seed evidence is retained once. Search evidence is never replaced by validation evidence. `results().validated` includes all evaluated finalists; `validatedFront` contains the feasible independent validation front.
 
 The companion commits each generation snapshot, completion event, and recovery checkpoint together. Recovery resumes committed generations and deduplicates logical evaluation identities. Local history, snapshots, events, and replay bytes count against `memoryLimitBytes` (default 256 MiB). Exceeding the limit raises `MEMORY_LIMIT` rather than discarding history.
 
@@ -66,10 +69,12 @@ Archives retain events, generation snapshots, candidate and seed evidence, failu
 
 Keep model reconstruction, simulation measurements, and replay rendering in the consuming application. Genetic Assembly owns optimization, worker scheduling, and evidence; the simulation library owns simulation behavior. Use public package exports rather than private paths or sibling checkouts.
 
-The `?worker` import above is a Vite-specific asset convention. Other bundlers can use the same public worker entry and supply `solverWorkerFactory`; no Vite configuration is required by the core SDK. The optional Vite helper excludes the SDK from prebundling for the default relative worker factory. Prefer the explicit worker import when using normal prebundling.
+Vite-specific `?worker` imports belong to the application integration and are not part of the core API. The optional `/vite` helper remains isolated from the main entry point. The explicit worker import above works with normal dependency prebundling and does not require the helper.
 
 Service event streams use cursor-based HTTP polling behind their async-iterator interface, rather than a persistent push connection. This simplifies reconnects and persisted replay, with polling latency and request overhead as the trade-off. Local streams follow retained in-memory events.
 
-Local and service handles share asynchronous lifecycle methods, but their metadata and setup are not identical. Local execution accepts a model object and constructor-level worker/memory settings; service execution accepts an immutable prepared study and configures evaluation concurrency per run. The `validate: false` run option applies to local execution; the prepared Node service runtime always validates finalists. Local history belongs to the optimizer, while service history belongs to durable operations. Portable export entry points also differ as described above.
+`Optimizer.run` uses the same `RunOptions` in both modes: population 32, 20 generations, seed 42, validation enabled, and evaluation concurrency 1 by default. Both optimizer constructors accept `evaluationConcurrency` (1–64), and a run can override it without changing the next run's default. `validate: false` skips finalist validation in both modes. `OptimizationResults` separates search, all validated finalists, and the validated front. Both modes expose filtered, paginated operation history with a default page size of 50 and a maximum of 1,000, and `optimizer.runHandle(id)` retrieves a search handle.
+
+Execution setup remains distinct: local execution receives executable model code and owns workers and memory; service execution receives a prepared study reference, URL, and credentials, and owns durable jobs. Low-level `StudyClient` resources retain HTTP metadata and snake-case solver configuration. Use the `Optimizer` and `OperationHandle<T>` interfaces for portable application code. Local session exports and service archives have different ownership scopes; see [Results and archives](./results.md).
 
 Until registry publication, coordinated tarballs provide reproducible installation. A repository may vendor a pinned artifact with its lockfile integrity, as the examples do. This is a distribution choice rather than a runtime dependency on a sibling checkout. Publishing coordinated package versions would allow ordinary registry installation without changing the integration code.

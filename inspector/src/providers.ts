@@ -23,8 +23,8 @@ export type InspectorProvider = Pick<
   run(id: string, config?: RunConfig): Promise<{ id: string }>;
   cancelJob(id: string): Promise<unknown>;
   runHandle(id: string): {
-    status(): Promise<RunStatus>;
-    results(): Promise<import("@genetic-assembly/sdk").LocalResults>;
+    status(): Promise<import("@genetic-assembly/sdk").OperationStatus>;
+    results(): Promise<import("@genetic-assembly/sdk").OptimizationResults>;
     cancel(): Promise<unknown>;
   };
   resourceFetch?: typeof fetch;
@@ -74,7 +74,8 @@ export class ArchiveInspectorProvider implements InspectorProvider {
           id: run.id,
           status: run.status,
           error: run.error,
-          current_generation: (run.results as any)?.search?.generations ?? 0,
+          errorDetail: run.errorDetail,
+          current_generation: run.generations.at(-1)?.generation ?? 0,
           config: {},
         });
     return { items, nextOffset: null };
@@ -183,8 +184,8 @@ export class ArchiveInspectorProvider implements InspectorProvider {
           id,
           status: run.status,
           error: run.error,
-          current_generation: (run.results as any)?.search?.generations ?? 0,
-          config: {},
+          errorDetail: run.errorDetail,
+          progress: run.generations.at(-1)?.summary,
         };
       },
       results: async () => {
@@ -244,16 +245,7 @@ export class LocalInspectorProvider extends ArchiveInspectorProvider {
     const reader = super.runHandle(id);
     return {
       ...reader,
-      status: async () => {
-        const state = await this.optimizer.runHandle(id).status();
-        return {
-          id,
-          status: state.status,
-          error: state.error,
-          current_generation: state.progress?.generation ?? 0,
-          config: {},
-        };
-      },
+      status: async () => this.optimizer.runHandle(id).status(),
       cancel: async () => this.optimizer.runHandle(id).cancel(),
     };
   }

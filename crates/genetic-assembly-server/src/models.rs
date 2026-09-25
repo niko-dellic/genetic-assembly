@@ -9,6 +9,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
+pub(crate) fn validation_enabled() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct CreateRunRequest {
     #[serde(default)]
@@ -21,6 +25,8 @@ pub struct CreateRunRequest {
     pub adapter_revision_id: Option<Uuid>,
     #[serde(default)]
     pub config: Nsga2Config,
+    #[serde(default = "validation_enabled")]
+    pub validate: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

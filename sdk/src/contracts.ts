@@ -117,6 +117,7 @@ export interface PreparedStudy {
   created_at?: string;
 }
 export interface RunConfig {
+  validate?: boolean;
   population_size?: number;
   generations?: number;
   seed?: number;

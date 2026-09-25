@@ -11,6 +11,7 @@ use std::time::Duration;
 struct Filter {
     #[serde(default)]
     offset: i64,
+    limit: Option<i64>,
     phase: Option<String>,
     status: Option<String>,
     candidate_id: Option<String>,
@@ -129,10 +130,17 @@ async fn get_study(
 ) -> Result<Json<Value>, ApiError> {
     Ok(Json(sqlx::query_scalar("SELECT jsonb_build_object('id',id,'spec',spec,'runtime',runtime,'created_at',created_at) FROM studies WHERE id=$1").bind(id).fetch_optional(&s.db).await?.ok_or_else(||ApiError::NotFound("study".into()))?))
 }
+#[derive(Deserialize)]
+struct StudyRunConfig {
+    #[serde(flatten)]
+    solver: genetic_assembly_core::Nsga2Config,
+    #[serde(default = "validation_enabled")]
+    validate: bool,
+}
 async fn start(
     State(s): State<Arc<AppState>>,
     Path(id): Path<String>,
-    Json(config): Json<genetic_assembly_core::Nsga2Config>,
+    Json(config): Json<StudyRunConfig>,
 ) -> Result<Json<RunStatusResponse>, ApiError> {
     let (problem, adapter): (Uuid, Uuid) =
         sqlx::query_as("SELECT problem_revision_id,adapter_revision_id FROM studies WHERE id=$1")
@@ -147,7 +155,8 @@ async fn start(
             adapter_revision_id: Some(adapter),
             scene_revision_id: None,
             evaluator_revision_id: None,
-            config,
+            validate: config.validate,
+            config: config.solver,
         }),
     )
     .await?;
@@ -259,7 +268,12 @@ async fn history(
     Path(id): Path<Uuid>,
     Query(f): Query<Filter>,
 ) -> Result<Json<Value>, ApiError> {
-    Ok(page(sqlx::query_scalar("SELECT data FROM study_evaluations WHERE owner_id=$1 AND ($2::text IS NULL OR phase=$2) AND ($3::text IS NULL OR status=$3) AND ($4::text IS NULL OR candidate_id=$4) ORDER BY created_at,id LIMIT 50 OFFSET $5").bind(id).bind(f.phase).bind(f.status).bind(f.candidate_id).bind(f.offset.max(0)).fetch_all(&s.db).await?,f.offset.max(0)))
+    let limit = f.limit.unwrap_or(50).clamp(1, 1000);
+    let items: Vec<Value> = sqlx::query_scalar("SELECT data FROM study_evaluations WHERE owner_id=$1 AND ($2::text IS NULL OR phase=$2) AND ($3::text IS NULL OR status=$3) AND ($4::text IS NULL OR candidate_id=$4) ORDER BY created_at,id LIMIT $6 OFFSET $5").bind(id).bind(f.phase).bind(f.status).bind(f.candidate_id).bind(f.offset.max(0)).bind(limit + 1).fetch_all(&s.db).await?;
+    let next = (items.len() > limit as usize).then_some(f.offset.max(0) + limit);
+    Ok(Json(
+        json!({"items": items.into_iter().take(limit as usize).collect::<Vec<_>>(), "nextOffset": next}),
+    ))
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

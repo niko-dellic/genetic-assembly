@@ -353,6 +353,7 @@ async fn execute_generic_run_inner(
         "GA_EVALUATION_CONCURRENCY".into(),
         config.threads.unwrap_or(1).clamp(1, 64).to_string(),
     );
+    let validate = run.config["validate"].as_bool().unwrap_or(true);
     let problem = bundle.problem.clone();
     let bindings = BTreeMap::from([
         ("kind".into(), "adapter".into()),
@@ -424,7 +425,8 @@ async fn execute_generic_run_inner(
             )
             .map_err(|error| error.to_string())?;
 
-            if adapter.capabilities().validate_front && !result.pareto_front.is_empty() {
+            if validate && adapter.capabilities().validate_front && !result.pareto_front.is_empty()
+            {
                 let requests: Vec<_> = result
                     .pareto_front
                     .iter()

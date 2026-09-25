@@ -1,3 +1,12 @@
+import {
+  observe,
+  type OperationHandle,
+  type HistoryOptions,
+  type RunOptions,
+  type OptimizationResults,
+  type OperationStatus,
+  type CandidateResult,
+} from "./operation.js";
 import { OptimizationError, errorDetail, type ErrorDetail } from "./errors.js";
 import {
   page,
@@ -34,33 +43,6 @@ import {
   type SolverProgress,
   type SolverResult,
 } from "./solver.js";
-export interface LocalRunOptions {
-  populationSize?: number;
-  generations?: number;
-  seed?: number;
-  validate?: boolean;
-  evaluationConcurrency?: number;
-}
-export interface CandidateResult {
-  candidateId: string;
-  decisions: Decisions;
-  metrics: Record<string, number>;
-  constraints: Record<string, number>;
-  seedCount: number;
-  feasible: boolean;
-}
-export interface LocalResults {
-  search: SolverResult;
-  validated: CandidateResult[];
-  validatedFront: CandidateResult[];
-}
-export interface LocalStatus {
-  id: string;
-  status: "queued" | "running" | "completed" | "failed" | "cancelled";
-  error?: string;
-  errorDetail?: ErrorDetail;
-  progress?: SolverProgress;
-}
 export async function digest(value: unknown) {
   return [
     ...new Uint8Array(
@@ -73,12 +55,14 @@ export async function digest(value: unknown) {
     .map((v) => v.toString(16).padStart(2, "0"))
     .join("");
 }
-export class LocalRunHandle<T = LocalResults> {
+export class LocalRunHandle<
+  T = OptimizationResults,
+> implements OperationHandle<T> {
   readonly id = crypto.randomUUID();
   engineVersion?: string;
   readonly controller = new AbortController();
-  private state: LocalStatus = { id: this.id, status: "queued" };
-  private listeners = new Set<(status: LocalStatus) => void>();
+  private state: OperationStatus = { id: this.id, status: "queued" };
+  private listeners = new Set<(status: OperationStatus) => void>();
   private output?: T;
   private journal: OperationEvent[] = [];
   private snapshots: GenerationSnapshot[] = [];
@@ -125,7 +109,7 @@ export class LocalRunHandle<T = LocalResults> {
       });
     return this.completion;
   }
-  /** @internal */ update(update: Partial<LocalStatus>) {
+  /** @internal */ update(update: Partial<OperationStatus>) {
     this.state = { ...this.state, ...update };
     if (
       update.status &&
@@ -158,7 +142,7 @@ export class LocalRunHandle<T = LocalResults> {
   async status() {
     return structuredClone(this.state);
   }
-  subscribe(listener: (status: LocalStatus) => void) {
+  subscribe(listener: (status: OperationStatus) => void) {
     this.listeners.add(listener);
     try {
       listener(structuredClone(this.state));
@@ -171,9 +155,10 @@ export class LocalRunHandle<T = LocalResults> {
   }
   async cancel() {
     if (["completed", "failed", "cancelled"].includes(this.state.status))
-      return;
+      return this.status();
     this.controller.abort();
     if (this.state.status === "queued") this.update({ status: "cancelled" });
+    return this.status();
   }
   /** @internal */
   release() {
@@ -185,8 +170,30 @@ export class LocalRunHandle<T = LocalResults> {
     this.listeners.clear();
     this.output = undefined;
   }
-  async wait() {
-    await this.completion;
+  async wait(signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    if (!["completed", "failed", "cancelled"].includes(this.state.status)) {
+      let onCancel!: () => void;
+      const queuedCancellation = new Promise<void>((resolve) => {
+        onCancel = () => {
+          if (this.state.status === "queued") resolve();
+        };
+        this.controller.signal.addEventListener("abort", onCancel, {
+          once: true,
+        });
+      });
+      try {
+        await observe(
+          Promise.race([
+            this.completion ?? Promise.resolve(),
+            queuedCancellation,
+          ]),
+          signal,
+        );
+      } finally {
+        this.controller.signal.removeEventListener("abort", onCancel);
+      }
+    }
     const status = await this.status();
     if (status.status === "failed")
       throw new OptimizationError(
@@ -194,8 +201,8 @@ export class LocalRunHandle<T = LocalResults> {
       );
     return status;
   }
-  async completed() {
-    await this.wait();
+  async completed(signal?: AbortSignal) {
+    await this.wait(signal);
     return this.results();
   }
   async results() {
@@ -212,8 +219,20 @@ export class LocalRunHandle<T = LocalResults> {
       })),
     });
   }
-  async history(options: PageOptions = {}) {
-    return page(this.store.history(this.id), options);
+  async history(options: HistoryOptions = {}) {
+    return page(
+      this.store
+        .history(this.id)
+        .filter(
+          (record) =>
+            (options.phase === undefined || record.phase === options.phase) &&
+            (options.status === undefined ||
+              record.status === options.status) &&
+            (options.candidateId === undefined ||
+              record.candidateId === options.candidateId),
+        ),
+      options,
+    );
   }
   async generations(options: PageOptions = {}) {
     return page(this.snapshots, options);
@@ -222,11 +241,16 @@ export class LocalRunHandle<T = LocalResults> {
     options: PageOptions & { phase?: string; generation?: number } = {},
   ) {
     const ids =
-      options.generation === undefined
+      options.generation === undefined &&
+      (options.phase ?? "search") !== "search"
         ? undefined
         : new Set(
             this.snapshots
-              .filter((s) => s.generation <= options.generation!)
+              .filter(
+                (s) =>
+                  options.generation === undefined ||
+                  s.generation <= options.generation,
+              )
               .flatMap((s) => s.evaluatedCandidateIds),
           );
     return page(
@@ -595,7 +619,7 @@ export class LocalRuntime {
     this.queue = operation;
     return handle;
   }
-  run(model: StudyModel, options: LocalRunOptions = {}) {
+  run(model: StudyModel, options: RunOptions = {}) {
     this.assertOpen();
     const concurrency =
       options.evaluationConcurrency ?? this.defaultConcurrency;

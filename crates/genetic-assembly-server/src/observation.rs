@@ -8,6 +8,7 @@ pub struct Cursor {
     after: i64,
     #[serde(default)]
     offset: i64,
+    limit: Option<i64>,
 }
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -84,13 +85,12 @@ async fn generations(
     Query(c): Query<Cursor>,
 ) -> Result<Json<Value>, ApiError> {
     owns(&s, id).await?;
-    let items:Vec<Value>=sqlx::query_scalar("SELECT snapshot FROM operation_generations WHERE owner_id=$1 ORDER BY generation LIMIT 50 OFFSET $2").bind(id).bind(c.offset.max(0)).fetch_all(&s.db).await?;
-    let next = if items.len() == 50 {
-        Some(c.offset.max(0) + 50)
-    } else {
-        None
-    };
-    Ok(Json(json!({"items":items,"nextOffset":next})))
+    let limit = c.limit.unwrap_or(50).clamp(1, 1000);
+    let items: Vec<Value> = sqlx::query_scalar("SELECT snapshot FROM operation_generations WHERE owner_id=$1 ORDER BY generation LIMIT $3 OFFSET $2").bind(id).bind(c.offset.max(0)).bind(limit + 1).fetch_all(&s.db).await?;
+    let next = (items.len() > limit as usize).then_some(c.offset.max(0) + limit);
+    Ok(Json(
+        json!({"items":items.into_iter().take(limit as usize).collect::<Vec<_>>(),"nextOffset":next}),
+    ))
 }
 
 pub(crate) async fn snapshot(
