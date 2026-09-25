@@ -167,6 +167,15 @@ pub struct GenerationSummary {
     pub infeasible_count: usize,
 }
 
+/// Data-only observation of actual surviving individuals; not a recovery checkpoint.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PopulationSnapshot {
+    pub generations: usize,
+    pub evaluations: u64,
+    pub pareto_front: Vec<Individual>,
+    pub final_population: Vec<Individual>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct OptimizationResult {
     pub generations: usize,

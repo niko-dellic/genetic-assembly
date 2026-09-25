@@ -1,4 +1,4 @@
-import { StudyClient, openArchive } from "@genetic-assembly/sdk";
+import { StudyClient, Optimizer, openArchive } from "@genetic-assembly/sdk";
 import { openGrabmReplay } from "./example/browser.js";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -52,21 +52,36 @@ assert.equal((await run.wait(timeout())).status, "completed");
 const rows = await all(run.id);
 assert.ok(rows.some((r) => r.phase === "validation"));
 const result = await run.results();
-assert.ok(result.search.members.length);
+const detachedOptimizer = new Optimizer({execution:'service',url:api.baseUrl});
+const detached = await detachedOptimizer.run(study,{populationSize:4,generations:1});
+detachedOptimizer.dispose();
+await assert.rejects(detached.wait(), /disposed|abort/i);
+assert.equal((await api.runHandle(detached.id).wait(timeout())).status,'completed');
+assert.ok(result.search.pareto_front.length);
 assert.ok(result.validated.length);
+const observed = await Array.fromAsync(run.events());
+assert.equal(observed.at(-1).type,'completed');
+assert.equal(new Set(observed.map(e=>e.sequence)).size,observed.length);
+const cursor = observed[Math.floor(observed.length/2)].sequence;
+assert.deepEqual(await Array.fromAsync(run.events({after:cursor})), observed.filter(e=>e.sequence>cursor));
+const snapshots = (await run.generations()).items;
+assert.equal(snapshots.length,3);
+assert.deepEqual(snapshots.at(-1).population.map(c=>c.candidateId),result.search.final_population.map(c=>String(c.id)));
+assert(observed.some(e=>e.type==='evaluation-started'));
+
 assert.ok(
   rows
     .filter((r) => r.phase === "validation")
     .every((r) => study.spec.validationSeeds.includes(r.seed)),
 );
 const record = rows.find((r) => r.status === "completed");
-await api.request("/v2/evaluations", {
+await api.request("/v3/evaluations", {
   method: "POST",
   body: JSON.stringify(record),
 });
 assert.equal((await all(run.id)).length, rows.length);
 await assert.rejects(
-  api.request("/v2/evaluations", {
+  api.request("/v3/evaluations", {
     method: "POST",
     body: JSON.stringify({
       ...record,
@@ -110,7 +125,7 @@ execFileSync(
   [
     "compose",
     "-p",
-    `ga-${JSON.parse(readFileSync("ga.config.json")).project}-v4`,
+    `ga-${JSON.parse(readFileSync("ga.config.json")).project}-v5`,
     "-f",
     ".genetic-assembly/compose.json",
     "restart",
@@ -160,7 +175,7 @@ execFileSync(
   [
     "compose",
     "-p",
-    `ga-${JSON.parse(readFileSync("ga.config.json")).project}-v4`,
+    `ga-${JSON.parse(readFileSync("ga.config.json")).project}-v5`,
     "-f",
     ".genetic-assembly/compose.json",
     "restart",
@@ -184,6 +199,11 @@ console.log("Waiting for the executor lease to expire and the run to recover");
 assert.equal((await recovery.wait(recoveryTimeout)).status, "completed");
 const recovered = await all(recovery.id);
 assert.equal(new Set(recovered.map((r) => r.id)).size, recovered.length);
+const recoveredSnapshots=(await recovery.generations()).items;
+assert.deepEqual(recoveredSnapshots.map(s=>s.generation),[0,1,2,3]);
+const recoveredEvents=await Array.fromAsync(recovery.events());
+assert.equal(recoveredEvents.filter(e=>e.type==='generation-completed').length,4);
+assert.equal(recoveredEvents.filter(e=>e.type==='completed').length,1);
 const control = await api.run(study.id, {
   population_size: 8,
   generations: 3,

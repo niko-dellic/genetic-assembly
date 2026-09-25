@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "generation": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "number"
+        },
+        "evaluations": {
+          "type": "number"
+        },
+        "pareto_size": {
+          "type": "number"
+        },
+        "feasible_count": {
+          "type": "number"
+        },
+        "infeasible_count": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "generation",
+        "evaluations",
+        "pareto_size",
+        "feasible_count",
+        "infeasible_count"
+      ],
+      "additionalProperties": {}
+    },
+    "evaluatedCandidateIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "population": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidateId": {
+            "type": "string"
+          },
+          "rank": {
+            "type": "number"
+          },
+          "crowdingDistance": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "candidateId",
+          "rank",
+          "crowdingDistance"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "paretoCandidateIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "discoveredParetoCandidateIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "generation",
+    "summary",
+    "evaluatedCandidateIds",
+    "population",
+    "paretoCandidateIds",
+    "discoveredParetoCandidateIds"
+  ],
+  "additionalProperties": false
+}

@@ -14,7 +14,7 @@ The JavaScript SDK integrates your model with a local Rust NSGA-II companion. Do
 4. [Run an experiment](./runs.md) with fixed simulation seeds.
 5. [Compare results](./results.md), [retain selected replays](./replay.md), and export.
 
-For a complete simulation example, use the [grabm neighborhood study](./grabm.md). It changes bounded graph geometry and capacity while holding population and authored demand fixed.
+Explore application-owned models in the [examples dashboard](./examples.md).
 
 ## Choose an integration
 
@@ -27,4 +27,4 @@ For a complete simulation example, use the [grabm neighborhood study](./grabm.md
 | `@genetic-assembly/three`          | Optional existing scene integration                |
 | `@genetic-assembly/visualizations` | Optional charts                                    |
 
-Version 0.4 introduces the study workflow and `/v2` API. npm publication is deferred; use coordinated local tarballs. The previous client/adapter packages and scene HTTP routes have been removed.
+Version 0.5 redesigns the runtime around reusable evaluator workers, asynchronous operation handles, ordered events, and authoritative generation snapshots, with a new `/v3` service API. npm publication is deferred; use coordinated local tarballs. The previous client/adapter packages and scene HTTP routes have been removed.

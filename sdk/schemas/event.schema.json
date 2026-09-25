@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "sequence": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "phase",
+        "evaluation-started",
+        "evaluation-completed",
+        "evaluation-failed",
+        "generation-completed",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "baseline",
+        "search",
+        "validation",
+        "replay"
+      ]
+    },
+    "candidateId": {
+      "type": "string"
+    },
+    "seed": {
+      "type": "number"
+    },
+    "recordId": {
+      "type": "string"
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "active": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "queued": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "candidateId": {
+          "type": "string"
+        },
+        "seed": {
+          "type": "number"
+        },
+        "asset": {
+          "type": "string"
+        },
+        "cause": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "stage",
+        "message"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "sequence",
+    "operationId",
+    "type",
+    "active",
+    "queued"
+  ],
+  "additionalProperties": false
+}

@@ -1,3 +1,13 @@
+import {
+  operationEventSchema,
+  generationSnapshotSchema,
+  candidateResultSchema,
+  errorDetailSchema,
+  collectPages,
+  aggregateCandidates,
+  page,
+  type PageOptions,
+} from "./observation.js";
 import { z } from "zod";
 import { evaluationSchema, studySpecSchema, canonical } from "./contracts.js";
 import { digest, type LocalRunHandle } from "./local.js";
@@ -6,7 +16,7 @@ import type { ReplayDataset } from "./model.js";
 export const archiveSchema = z
   .object({
     format: z.literal("genetic-assembly-archive"),
-    version: z.literal(1),
+    version: z.literal(2),
     createdAt: z.string().datetime(),
     provenance: z
       .object({
@@ -23,6 +33,7 @@ export const archiveSchema = z
       z
         .object({
           id: z.string().uuid(),
+          kind: z.enum(["search", "baseline", "replay"]),
           engineVersion: z.string().optional(),
           study: studySpecSchema,
           studyId: z.string().optional(),
@@ -34,6 +45,14 @@ export const archiveSchema = z
             "failed",
           ]),
           error: z.string().optional(),
+          errorDetail: errorDetailSchema.optional(),
+          events: z.array(operationEventSchema),
+          generations: z.array(generationSnapshotSchema),
+          candidates: z.array(
+            candidateResultSchema.extend({
+              phase: z.enum(["baseline", "search", "validation", "replay"]),
+            }),
+          ),
           results: z.json().optional(),
         })
         .strict(),
@@ -94,6 +113,25 @@ export class ArchiveReader {
       ),
     );
   }
+  generations(ownerId: string, options: PageOptions = {}) {
+    return page(
+      this.data.runs.find((run) => run.id === ownerId)?.generations ?? [],
+      options,
+    );
+  }
+  events(ownerId: string, after = 0) {
+    return structuredClone(
+      this.data.runs
+        .find((run) => run.id === ownerId)
+        ?.events.filter((event) => event.sequence > after) ?? [],
+    );
+  }
+  candidates(ownerId: string, options: PageOptions = {}) {
+    return page(
+      this.data.runs.find((run) => run.id === ownerId)?.candidates ?? [],
+      options,
+    );
+  }
   dataset(id: string): ReplayDataset {
     const dataset = this.data.datasets[id];
     if (!dataset) throw Error("Replay data is unavailable");
@@ -144,29 +182,34 @@ export async function openArchive(
 /** @internal */
 export async function exportMemory(
   store: MemoryStore,
-  runs: Iterable<LocalRunHandle>,
+  runs: Iterable<LocalRunHandle<any>>,
   studies: Iterable<import("./contracts.js").StudySpec>,
   materializations: unknown[],
 ): Promise<Uint8Array> {
-  const snapshots = [...runs].map((run) => {
-    let results: any;
-    try {
-      results = run.results();
-    } catch {
-      /* Running/failed sessions retain evidence without a front. */
-    }
-    return {
-      id: run.id,
-      engineVersion: run.engineVersion,
-      study: run.study,
-      status: run.status().status,
-      error: run.status().error,
-      results,
-    };
-  });
+  const snapshots = await Promise.all(
+    [...runs].map(async (run) => {
+      let results: any;
+      try {
+        results = await run.results();
+      } catch {
+        /* Running/failed sessions retain evidence without a front. */
+      }
+      return {
+        id: run.id,
+        kind: run.kind,
+        engineVersion: run.engineVersion,
+        study: run.study,
+        status: (await run.status()).status,
+        error: (await run.status()).error,
+        errorDetail: (await run.status()).errorDetail,
+        ...run.snapshotObservation(),
+        results,
+      };
+    }),
+  );
   const data = archiveSchema.parse({
     format: "genetic-assembly-archive",
-    version: 1,
+    version: 2,
     createdAt: new Date().toISOString(),
     provenance: {
       execution: "local",
@@ -208,23 +251,21 @@ export async function exportServiceArchive(
   const status = await handle.status();
   const source = (await handle.export()) as {
     study: import("./contracts.js").PreparedStudy;
-    results: {
-      search: {
-        members: {
-          individual: import("./solver.js").SolverIndividual;
-          materialization?: { data: unknown };
-        }[];
-      };
-      validated: import("./contracts.js").ValidatedCandidate[];
-    };
+    results: import("./local.js").LocalResults | null;
+    materializations: {
+      individual: import("./solver.js").SolverIndividual;
+      materialization?: { data: unknown };
+    }[];
     evaluations: import("./contracts.js").EvaluationRecord[];
     datasets: import("./contracts.js").DatasetReference[];
   };
   const evaluations = [...source.evaluations];
   const owners = new Set(source.datasets.map((dataset) => dataset.ownerId));
+  const jobs: import("./contracts.js").Job[] = [];
   let jobOffset = 0;
   for (;;) {
     const page = await client.jobs(source.study.id, jobOffset);
+    jobs.push(...page.items);
     for (const job of page.items) owners.add(job.id);
     if (page.nextOffset === null) break;
     jobOffset = page.nextOffset;
@@ -256,18 +297,9 @@ export async function exportServiceArchive(
       resources,
     };
   }
-  const validated = source.results.validated.map((candidate) => ({
-    candidateId: candidate.candidate_id,
-    decisions: candidate.decisions,
-    metrics: candidate.metrics,
-    constraints: candidate.constraints,
-    seedCount: candidate.seed_count,
-    feasible: Object.values(candidate.constraints).every((value) => value <= 0),
-  }));
-  const { decodeDecisions } = await import("./study.js");
   const data = archiveSchema.parse({
     format: "genetic-assembly-archive",
-    version: 1,
+    version: 2,
     createdAt: new Date().toISOString(),
     provenance: {
       execution: "service",
@@ -281,36 +313,77 @@ export async function exportServiceArchive(
     runs: [
       {
         id: runId,
+        kind: "search",
         study: source.study.spec,
         studyId: source.study.id,
         status: status.status,
         error: status.error ?? undefined,
-        results: {
-          search: {
-            generations: status.current_generation,
-            evaluations: new Set(
-              source.evaluations
-                .filter((record) => record.phase === "search")
-                .map((record) => record.candidateId),
-            ).size,
-            pareto_front: source.results.search.members.map(
-              (member) => member.individual,
-            ),
-          },
-          validatedFront: validated,
-        },
+        events: await (async () => {
+          const events = [];
+          let after = 0;
+          for (;;) {
+            const result = await handle.eventPage(after);
+            if (!result.items.length) return events;
+            events.push(...result.items);
+            after = result.items.at(-1)!.sequence;
+          }
+        })(),
+        generations: await collectPages((options) =>
+          handle.generations(options),
+        ),
+        candidates: ["search", "validation"].flatMap((phase) =>
+          aggregateCandidates(
+            source.evaluations.filter((record) => record.phase === phase),
+          ).map((candidate) => ({ ...candidate, phase })),
+        ),
+        results: source.results,
       },
+      ...(await Promise.all(
+        jobs.map(async (job) => ({
+          id: job.id,
+          kind: job.kind,
+          study: source.study.spec,
+          studyId: source.study.id,
+          status: job.status,
+          error: job.error ?? undefined,
+          events: await (async () => {
+            const events = [];
+            let after = 0;
+            for (;;) {
+              const result = await client.runHandle(job.id).eventPage(after);
+              events.push(...result.items);
+              if (result.items.length < 1000) return events;
+              after = result.items.at(-1)!.sequence;
+            }
+          })(),
+          generations: [],
+          candidates: aggregateCandidates(
+            evaluations.filter((record) => record.ownerId === job.id),
+          ).map((candidate) => ({ ...candidate, phase: job.kind })),
+          results:
+            job.status === "completed"
+              ? aggregateCandidates(
+                  evaluations.filter((record) => record.ownerId === job.id),
+                )[0]
+              : undefined,
+        })),
+      )),
     ],
     evaluations,
     datasets,
-    materializations: source.results.search.members
-      .filter((member) => member.materialization)
-      .map((member) => ({
-        ownerId: runId,
-        candidateId: String(member.individual.id),
-        decisions: decodeDecisions(source.study.spec, member.individual.genes),
-        value: member.materialization!.data,
-      })),
+    materializations: await Promise.all(
+      source.materializations
+        .filter((member) => member.materialization)
+        .map(async (member) => ({
+          ownerId: runId,
+          candidateId: String(member.individual.id),
+          decisions: (await import("./study.js")).decodeDecisions(
+            source.study.spec,
+            member.individual.genes,
+          ),
+          value: member.materialization!.data,
+        })),
+    ),
   });
   const bytes = new TextEncoder().encode(
     JSON.stringify({ sha256: await digest(data), data }),

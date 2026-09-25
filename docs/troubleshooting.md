@@ -11,7 +11,6 @@
 | Local dependency directory rejected | Install a `.tgz` package instead of a linked source directory |
 | Native dependency fails | Use a compatible custom base image and explicit system dependencies |
 | Replay unavailable | Request replay for the selected candidate; search measurements do not retain every simulation trace |
-| Missing authored demand in grabm | Add explicit agent needs with IDs matching schedule/decision items, or declare a different custom metric |
 | Changed validation feasibility | Inspect validation seeds and constraints separately from the original search front |
 | Port already in use | Choose another port in `ga.config.json`; prepare the study again |
 | Restart cannot load runtime | Restore the snapshot volume together with Postgres and artifact storage |

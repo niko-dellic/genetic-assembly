@@ -5,7 +5,7 @@
   "type": "object",
   "required": ["protocol_version", "request_id", "type"],
   "properties": {
-    "protocol_version": { "const": "genetic-assembly-adapter-v2" },
+    "protocol_version": { "const": "genetic-assembly-adapter-v3" },
     "request_id": { "type": "integer", "minimum": 0 },
     "type": {
       "enum": [

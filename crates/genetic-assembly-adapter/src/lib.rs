@@ -17,7 +17,7 @@ use std::thread;
 use std::time::Duration;
 use thiserror::Error;
 
-pub const ADAPTER_PROTOCOL_VERSION: &str = "genetic-assembly-adapter-v2";
+pub const ADAPTER_PROTOCOL_VERSION: &str = "genetic-assembly-adapter-v3";
 pub const PROBLEM_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

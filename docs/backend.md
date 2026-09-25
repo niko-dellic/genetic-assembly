@@ -11,7 +11,7 @@
 }
 ```
 
-The runtime snapshots declared files, the package manifest, the lockfile, and local dependency tarballs. Dependencies are installed in Linux. Whole package directories survive installation, including grabm's `child.js`. Each revision runs from a read-only snapshot volume; editing the working project does not alter a running revision.
+The runtime snapshots declared files, the package manifest, the lockfile, and local dependency tarballs. Dependencies are installed in Linux. Whole package directories survive installation, including package-owned worker entry points. Each revision runs from a read-only snapshot volume; editing the working project does not alter a running revision.
 
 `files` must include data and dynamically loaded modules. Secrets, directory links, and host `node_modules` cannot be snapshot inputs. Runtime dependencies must be production dependencies. Install scripts are disabled by default; use a custom base image for packages requiring native build steps or system libraries.
 
@@ -23,7 +23,7 @@ The runtime snapshots declared files, the package manifest, the lockfile, and lo
 - `ga backup ./backup`: export database metadata, artifact bytes and runtime snapshots together.
 - `ga cleanup --delete-data`: explicitly remove this project's new data volumes.
 
-Compose uses project name `ga-<project>-v4`, with `database`, `artifacts`, and `ga-<project>-snapshots-v4` volumes. Version 0.4 does not delete previous development data. Stop the old services, inspect their volumes and retain a backup before disposing of them yourself.
+Compose uses project name `ga-<project>-v5`, with `database`, `artifacts`, and `ga-<project>-snapshots-v5` volumes. Version 0.5 does not delete previous development data. Stop the old services, inspect their volumes and retain a backup before disposing of them yourself.
 
 ## Existing companion and custom runtime
 

@@ -8,7 +8,12 @@ const group = (text: string, items: [string, string][]) => ({
   })),
 });
 export default defineConfig({
-  markdown: { theme: { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' } },
+  markdown: {
+    theme: {
+      light: "github-light-high-contrast",
+      dark: "github-dark-high-contrast",
+    },
+  },
   title: "Genetic Assembly",
   description:
     "Optimization for your application. Setup, integration guides, and complete public API reference.",
@@ -37,7 +42,12 @@ export default defineConfig({
     },
   },
   themeConfig: {
-    logo: { src: "/android-chrome-192x192.png", alt: "", width: 24, height: 24 },
+    logo: {
+      src: "/android-chrome-192x192.png",
+      alt: "",
+      width: 24,
+      height: 24,
+    },
     nav: [
       { text: "Home", link: "/" },
       { text: "Docs", link: "/docs/" },
@@ -59,6 +69,7 @@ export default defineConfig({
           ["Installation", "/installation"],
           ["First baseline and run", "/quickstart"],
           ["Local execution", "/local"],
+          ["Runtime and observation", "/runtime"],
         ]),
         group("Foundations", [
           ["Core concepts", "/concepts"],
@@ -130,7 +141,10 @@ export default defineConfig({
       },
     ],
     ["link", { rel: "manifest", href: "/site.webmanifest" }],
-    ['script', {}, `(() => {
+    [
+      "script",
+      {},
+      `(() => {
       const root = document.documentElement;
       root.dataset.palette = 'neutral';
       const sync = () => {
@@ -139,6 +153,7 @@ export default defineConfig({
       };
       new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ['class'] });
       sync();
-    })();`],
+    })();`,
+    ],
   ],
 });

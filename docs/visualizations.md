@@ -22,3 +22,5 @@ Use a separate element for each chart and call the returned cleanup function whe
 Use `validateDataset` at integration boundaries. Selection state links views through candidate IDs. Missing complete history should remain visible as unavailable rather than being filled with invented values.
 
 [Recorded interactive examples](./examples.md) · [All visualization functions and types](./api-reference/visualizations/index.md)
+
+Use `fromGenerationSnapshots(study, snapshots, candidates)` to adapt SDK-owned generation history. It uses exact population and front membership, computes chart statistics from the referenced aggregate measurements, and rejects missing candidate evidence. It does not infer survivors from evaluation order.

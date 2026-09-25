@@ -8,7 +8,7 @@
   "properties": {
     "name": { "type": "string", "minLength": 1 },
     "adapter_version": { "type": "string", "minLength": 1 },
-    "protocol_version": { "const": "genetic-assembly-adapter-v2", "default": "genetic-assembly-adapter-v2" },
+    "protocol_version": { "const": "genetic-assembly-adapter-v3", "default": "genetic-assembly-adapter-v3" },
     "command": { "type": "string", "minLength": 1 },
     "args": { "type": "array", "items": { "type": "string" }, "default": [] },
     "working_directory": { "type": "string" },

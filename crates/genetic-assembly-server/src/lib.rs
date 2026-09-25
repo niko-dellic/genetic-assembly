@@ -1,6 +1,7 @@
 mod error;
 mod executor;
 mod models;
+mod observation;
 mod storage;
 mod studies;
 
@@ -128,6 +129,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             }),
         )
         .merge(studies::routes())
+        .merge(observation::routes())
         .layer(DefaultBodyLimit::max(256 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
@@ -501,29 +503,6 @@ struct FrontRow {
     materialization: Option<serde_json::Value>,
 }
 
-async fn run_results(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
-) -> Result<Json<RunResultsResponse>, ApiError> {
-    let run = fetch_run(&state.db, id).await?;
-    if run.status != "completed" && run.status != "cancelled" {
-        if run.status == "failed" {
-            return Err(ApiError::Conflict(format!(
-                "run failed: {}",
-                run.error
-                    .as_deref()
-                    .unwrap_or("no failure reason was recorded")
-            )));
-        }
-        return Err(ApiError::Conflict(format!("run is {}", run.status)));
-    }
-    let members = fetch_front_members(&state.db, id).await?;
-    Ok(Json(RunResultsResponse {
-        run_id: id,
-        members,
-    }))
-}
-
 async fn fetch_front_members(db: &PgPool, id: Uuid) -> Result<Vec<ResultMember>, ApiError> {
     let rows = sqlx::query_as::<_, FrontRow>(
         "SELECT individual,patches,materialization FROM run_front_members WHERE run_id=$1 ORDER BY member_index",
@@ -748,6 +727,22 @@ async fn run_generic_analytics(
 
 pub(crate) async fn emit_event(state: &AppState, event: RunEvent) -> Result<(), ApiError> {
     let run_id = event.run_id();
+    let observed = match &event {
+        RunEvent::Status { status, .. } if status == "cancelled" => {
+            Some(json!({"type":"cancelled"}))
+        }
+        RunEvent::Status { status, .. } if status == "running" => {
+            Some(json!({"type":"phase","phase":"search"}))
+        }
+        RunEvent::Completed { .. } => Some(json!({"type":"completed"})),
+        RunEvent::Failed { error, .. } => Some(
+            json!({"type":"failed","error":{"code":"OPERATION_FAILED","stage":"service","message":error}}),
+        ),
+        _ => None,
+    };
+    if let Some(observed) = observed {
+        observation::append(state, run_id, observed).await?;
+    }
     sqlx::query("INSERT INTO run_events(run_id,event) VALUES($1,$2)")
         .bind(run_id)
         .bind(serde_json::to_value(&event).map_err(|error| ApiError::Internal(error.to_string()))?)

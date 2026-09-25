@@ -21,7 +21,7 @@ import {
   type StudySpec,
 } from "@genetic-assembly/sdk";
 import { checkStudy } from "@genetic-assembly/sdk/node";
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 const root = process.cwd(),
   directory = join(root, ".genetic-assembly"),
   packageRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -79,7 +79,7 @@ function compose(c: Config, params: string[]) {
   return run("docker", [
     "compose",
     "-p",
-    `ga-${c.project}-v4`,
+    `ga-${c.project}-v5`,
     "-f",
     join(directory, "compose.json"),
     ...params,
@@ -210,7 +210,11 @@ async function snapshot(
   }
   writeFileSync(
     join(context, "runner.mjs"),
-    `import model from ${JSON.stringify("./" + c.entry.split("\\").join("/"))};\nimport {serveStudy} from '@genetic-assembly/sdk/node';\nawait serveStudy(model);\n`,
+    `import model from ${JSON.stringify("./" + c.entry.split("\\").join("/"))};\nimport {serveStudy} from '@genetic-assembly/sdk/node';\nimport {Worker} from 'node:worker_threads';\nawait serveStudy(model, {createWorker: () => new Worker(new URL('./evaluator.mjs', import.meta.url))});\n`,
+  );
+  writeFileSync(
+    join(context, "evaluator.mjs"),
+    `import model from ${JSON.stringify("./" + c.entry.split("\\").join("/"))};\nimport {parentPort} from 'node:worker_threads';\nimport {serveStudyEvaluator} from '@genetic-assembly/sdk/node';\nserveStudyEvaluator(model, parentPort);\n`,
   );
   writeFileSync(
     join(context, "Dockerfile"),
@@ -222,7 +226,7 @@ async function snapshot(
       .status !== 0
   )
     run("docker", ["build", "-t", image, context]);
-  const volume = `ga-${c.project}-snapshots-v4`;
+  const volume = `ga-${c.project}-snapshots-v5`;
   run("docker", ["volume", "create", volume]);
   run("docker", [
     "run",
@@ -392,7 +396,7 @@ async function main() {
   }
   if (command === "help") {
     console.log(
-      "ga init | check | up | baseline | run | inspect | status | logs | down | backup <directory> | cleanup\nModels use study.mjs; ga.config.json declares snapshot files. Storage uses a separate v4 namespace.",
+      "ga init | check | up | baseline | run | inspect | status | logs | down | backup <directory> | cleanup\nModels use study.mjs; ga.config.json declares snapshot files. Storage uses a separate v5 namespace.",
     );
     return;
   }
@@ -432,14 +436,14 @@ async function main() {
           `Local inspector: ${inspector.url}. Press Ctrl+C to close.`,
         );
       }
-      const baseline = await optimizer.baseline(model);
+      const baseline = await (await optimizer.baseline(model)).completed();
       console.log("Baseline:", JSON.stringify(baseline));
       if (command === "run") {
         const value = (flag: string, fallback: number) => {
           const index = args.indexOf(flag);
           return index < 0 ? fallback : Number(args[index + 1]);
         };
-        const run = optimizer.run(model, {
+        const run = await optimizer.run(model, {
           populationSize: value("--population", 24),
           generations: value("--generations", 8),
           seed: value("--seed", 42),
@@ -453,7 +457,7 @@ async function main() {
         unsubscribe();
         if (status.status !== "completed")
           throw Error(status.error ?? status.status);
-        const results = run.results();
+        const results = await run.results();
         console.log(
           `Search front: ${results.search.pareto_front.length}; validated front: ${results.validatedFront.length}; retained measurements: ${optimizer.history().length}`,
         );
@@ -501,7 +505,7 @@ async function main() {
       [
         "compose",
         "-p",
-        `ga-${c.project}-v4`,
+        `ga-${c.project}-v5`,
         "-f",
         join(directory, "compose.json"),
         "exec",
@@ -516,8 +520,8 @@ async function main() {
     );
     writeFileSync(join(destination, "database.sql"), sql);
     for (const [name, volume] of [
-      ["artifacts", `ga-${c.project}-v4_artifacts`],
-      ["snapshots", `ga-${c.project}-snapshots-v4`],
+      ["artifacts", `ga-${c.project}-v5_artifacts`],
+      ["snapshots", `ga-${c.project}-snapshots-v5`],
     ])
       run("docker", [
         "run",
@@ -547,10 +551,10 @@ async function main() {
   if (command === "cleanup") {
     if (!args.includes("--delete-data"))
       throw Error(
-        "Cleanup deletes this project’s v4 database, artifacts and snapshots. Add --delete-data to request it explicitly.",
+        "Cleanup deletes this project’s v5 database, artifacts and snapshots. Add --delete-data to request it explicitly.",
       );
     compose(c, ["down", "--volumes"]);
-    run("docker", ["volume", "rm", `ga-${c.project}-snapshots-v4`]);
+    run("docker", ["volume", "rm", `ga-${c.project}-snapshots-v5`]);
     return;
   }
   const api = client(c);

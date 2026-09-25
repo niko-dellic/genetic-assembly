@@ -18,6 +18,7 @@ enum Command {
     },
     Result,
     Summary,
+    Snapshot,
 }
 
 #[derive(Default)]
@@ -41,7 +42,10 @@ impl Runtime {
                 solver.tell(candidates).map_err(|e| e.to_string())?;
                 serde_json::to_value(solver.summary())
             }
-            Command::Result => serde_json::to_value(solver.result().map_err(|e| e.to_string())?),
+            Command::Result => serde_json::to_value(solver.snapshot().map_err(|e| e.to_string())?),
+            Command::Snapshot => {
+                serde_json::to_value(solver.snapshot().map_err(|e| e.to_string())?)
+            }
             Command::Summary => serde_json::to_value(solver.summary()),
             Command::Init { .. } => unreachable!(),
         }

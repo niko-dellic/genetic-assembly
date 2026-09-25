@@ -14,6 +14,8 @@ export interface ReplayDataset {
   resources: Record<string, Uint8Array>;
 }
 export interface EvaluationContext {
+  /** Service worker scratch directory; absent in portable browser evaluations. */
+  directory?: string;
   seed: number;
   phase: EvaluationRecord["phase"];
   signal: AbortSignal;

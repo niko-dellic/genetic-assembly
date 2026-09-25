@@ -8,7 +8,7 @@ In your application directory:
 
 ```sh
 npm init -y
-npm install /path/to/artifacts/genetic-assembly-sdk-0.4.0.tgz /path/to/artifacts/genetic-assembly-cli-0.4.0.tgz
+npm install /path/to/artifacts/genetic-assembly-sdk-0.5.0.tgz /path/to/artifacts/genetic-assembly-cli-0.5.0.tgz
 npx ga init
 npm run ga:check
 ```

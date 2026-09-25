@@ -23,4 +23,4 @@ Optional `repair` returns `{decisions, repairs}`. Make repairs deterministic and
 
 Optional `materialize` produces an application design from canonical decisions. Optional `dataset` returns `{directory, manifestKey, runHash}` after a retained evaluation. Dataset files are uploaded before temporary files are removed. See [replay storage](./replay.md).
 
-[Node API reference](./api-reference/node/index.md) · [Goal selection](./goals.md) · [grabm example](./grabm.md)
+[Node API reference](./api-reference/node/index.md) · [Goal selection](./goals.md)

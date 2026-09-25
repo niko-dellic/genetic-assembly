@@ -17,10 +17,10 @@ const study = defineStudy({
 })
 const optimizer = new Optimizer({execution: 'local', storage: 'memory'})
 try {
-  const baseline = await optimizer.baseline(study)
-  const run = optimizer.run(study, {populationSize: 16, generations: 8, seed: 42})
+  const baseline = await (await optimizer.baseline(study)).completed()
+  const run = await optimizer.run(study, {populationSize: 16, generations: 8, seed: 42})
   await run.wait()
-  console.log(baseline, run.results(), run.history())
+  console.log(baseline, await run.results(), await run.history())
   const archive = await optimizer.export()
   // Save these bytes explicitly if you want to inspect the session later.
 } finally {
@@ -69,8 +69,10 @@ const study = defineWorkerStudy(spec, () =>
 )
 ```
 
-The worker is terminated after its evaluation or on cancellation, including when evaluation hangs. Use bounded concurrency; do not create uncontrolled nested worker pools. Inline models can keep application closures, but their cache identity is limited to the registered model object within that optimizer session. Update the declared version and model registration when behavior changes.
+Workers are reused within one optimizer and study. Choose isolated mode for fresh module state; cancellation terminates an active worker, including when evaluation hangs. Use bounded concurrency; do not create uncontrolled nested worker pools. Inline models can keep application closures, but their cache identity is limited to the registered model object within that optimizer session. Update the declared version and model registration when behavior changes.
 
 ## Runtime comparison
 
 The repository checks native/WASM solver fixtures within a `1e-12` relative/absolute tolerance and compares the seeded neighborhood measurements in Node, Chromium, Firefox and WebKit. Tiny last-digit differences can occur in travel-time arithmetic across JavaScript engines. Benchmark records are written to `artifacts/solver-benchmark.json` and `artifacts/grabm-benchmark.json`; the small numerical fixture does not predict simulation throughput.
+
+See [runtime, workers, and observation](./runtime.md) for the supported Vite recipe, operation handles, generation snapshots, cursor streams, and structured errors.

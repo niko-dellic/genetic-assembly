@@ -11,15 +11,15 @@ test('packaged WASM runs mixed decisions with reproducible ordered results acros
  for(const concurrency of [1,4]) {
   const optimizer=new Optimizer({evaluationConcurrency:concurrency});
   try {
-   const baseline=await optimizer.baseline(study); assert.equal(baseline.seedCount,2);
-   const run=optimizer.run(study,{populationSize:8,generations:3,seed:42});
+   const baseline=await (await optimizer.baseline(study)).completed(); assert.equal(baseline.seedCount,2);
+   const run=(await optimizer.run(study,{populationSize:8,generations:3,seed:42}));
    assert.equal((await run.wait()).status,'completed');
-   const result=run.results(); outputs.push(result);
+   const result=(await run.results()); outputs.push(result);
    assert.equal(result.search.evaluations,32);
-   assert.equal(run.history().filter(r=>r.phase==='search').length,64);
-   const archive=await openArchive(await optimizer.export()); assert.equal(archive.snapshot().runs[0].engineVersion,"0.4.0");
+   assert.equal((await run.history({limit:1000})).items.filter(r=>r.phase==='search').length,64);
+   const archive=await openArchive(await optimizer.export()); assert.equal(archive.snapshot().runs.find(r=>r.engineVersion).engineVersion,"0.5.0");
    assert.ok(result.validated.length); assert.ok(result.validatedFront.length);
-   assert.ok(run.history().filter(r=>r.phase==='validation').every(r=>r.seed===3||r.seed===4));
+   assert.ok((await run.history({limit:1000})).items.filter(r=>r.phase==='validation').every(r=>r.seed===3||r.seed===4));
   } finally {optimizer.dispose();}
  }
  assert.deepEqual(outputs[0],outputs[1]);
@@ -27,9 +27,9 @@ test('packaged WASM runs mixed decisions with reproducible ordered results acros
 test('missing metrics fail explicitly and retain failed evaluations', async () => {
  const optimizer=new Optimizer();
  try {
- const run=optimizer.run({...study,evaluate:()=>({metrics:{}})},{populationSize:4,generations:0});
+ const run=(await optimizer.run({...study,evaluate:()=>({metrics:{}})},{populationSize:4,generations:0}));
  await assert.rejects(run.wait(),/Required metric/);
- assert.equal(run.status().status,'failed'); assert.equal(run.history()[0].status,'failed');
+ assert.equal((await run.status()).status,'failed'); assert.equal((await run.history({limit:1000})).items[0].status,'failed');
  }finally{optimizer.dispose();}
 });
 test('memory limit fails explicitly without dropping existing history', async () => {
@@ -39,24 +39,24 @@ test('memory limit fails explicitly without dropping existing history', async ()
 test('cancels queued and active runs, then releases workers', async () => {
  const optimizer=new Optimizer();
  const slow={...study,async evaluate(d,i,c){await new Promise(resolve=>setTimeout(resolve,20)); c.signal.throwIfAborted(); return study.evaluate(d,i,c);}};
- const first=optimizer.run(slow,{populationSize:8,generations:100});
- const second=optimizer.run(study); second.cancel();
+ const first=(await optimizer.run(slow,{populationSize:8,generations:100}));
+ const second=(await optimizer.run(study)); second.cancel();
  await new Promise(resolve=>setTimeout(resolve,50)); first.cancel();
  assert.equal((await first.wait()).status,'cancelled'); assert.equal((await second.wait()).status,'cancelled');
- optimizer.dispose(); assert.throws(()=>optimizer.run(study),/disposed/);
+ optimizer.dispose(); await assert.rejects(optimizer.run(study),/disposed/);
 });
 test('validation can change feasibility without rewriting search results',async()=>{
  const optimizer=new Optimizer();
  try{
   const model={...study,constraints:{limit:{metric:'gate',operator:'<=',bound:0}},evaluate(d,i,c){return {metrics:{...study.evaluate(d,i,c).metrics,gate:c.phase==='validation'?1:0}};}};
-  const run=optimizer.run(model,{populationSize:4,generations:1});await run.wait();
-  const result=run.results();assert(result.search.pareto_front.every(c=>c.constraint_violation===0));assert(result.validated.every(c=>!c.feasible&&c.constraints.limit===1));
+  const run=(await optimizer.run(model,{populationSize:4,generations:1}));await run.wait();
+  const result=(await run.results());assert(result.search.pareto_front.every(c=>c.constraint_violation===0));assert(result.validated.every(c=>!c.feasible&&c.constraints.limit===1));
  }finally{optimizer.dispose();}
 });
 test('retention rejects malformed bytes and prevents memory accounting bypass',async()=>{
  const optimizer=new Optimizer();
  try{
-  await assert.rejects(async()=>optimizer.baseline({...study,evaluate(d,i,c){c.retainDataset({manifestKey:'manifest',runHash:'x',resources:{manifest:'not bytes'}});return study.evaluate(d,i,c);}}),/Uint8Array/);
+  await assert.rejects(async()=>(await optimizer.baseline({...study,evaluate(d,i,c){c.retainDataset({manifestKey:'manifest',runHash:'x',resources:{manifest:'not bytes'}});return study.evaluate(d,i,c);}})).completed(),/Uint8Array/);
   assert.equal(optimizer.history().length,0);
  }finally{optimizer.dispose();}
 });
@@ -64,7 +64,7 @@ test('one failed concurrent evaluation aborts a sibling that never resolves',asy
  const optimizer=new Optimizer({evaluationConcurrency:2});let calls=0;
  try{
   const model={...study,evaluate(){if(++calls===1)return new Promise(()=>{});return {metrics:{}};}};
-  const run=optimizer.run(model,{populationSize:4,generations:1});
-  await assert.rejects(run.wait(),/Required metric/);assert.equal(run.status().status,'failed');
+  const run=(await optimizer.run(model,{populationSize:4,generations:1}));
+  await assert.rejects(run.wait(),/Required metric/);assert.equal((await run.status()).status,'failed');
  }finally{optimizer.dispose();}
 });

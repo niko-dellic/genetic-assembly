@@ -1,6 +1,6 @@
 {
   "name": "@genetic-assembly/sdk",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "Define, run, and inspect reproducible optimization studies",
   "main": "dist/index.js",
@@ -14,7 +14,13 @@
       "types": "./dist/node/index.d.ts",
       "import": "./dist/node/index.js"
     },
-    "./schemas/*": "./schemas/*"
+    "./schemas/*": "./schemas/*",
+    "./solver-worker": "./dist/solver-browser-worker.js",
+    "./solver.wasm": "./dist/solver.wasm",
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js"
+    }
   },
   "files": [
     "dist",

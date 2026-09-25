@@ -1,5 +1,5 @@
 import { exportMemory } from "./archive.js";
-import { StudyClient, type RunHandle } from "./index.js";
+import { StudyClient, type RunHandle, type JobHandle } from "./index.js";
 import type { Decisions, Job, PreparedStudy } from "./contracts.js";
 import type { StudyModel } from "./model.js";
 import {
@@ -16,6 +16,7 @@ export type OptimizerOptions<M extends Execution> = M extends "service"
       storage?: "memory";
       evaluationConcurrency?: number;
       memoryLimitBytes?: number;
+      solverWorkerFactory?: import("./solver.js").SolverWorkerFactory;
     };
 type Model<M extends Execution> = M extends "service"
   ? PreparedStudy
@@ -53,14 +54,17 @@ export class Optimizer<M extends Execution = "local"> {
       this.local = new LocalRuntime(
         settings.evaluationConcurrency,
         settings.memoryLimitBytes,
+        settings.solverWorkerFactory,
       );
   }
   private assertOpen() {
     if (this.disposed) throw Error("Optimizer disposed");
   }
-  baseline(
+  async baseline(
     study: Model<M>,
-  ): M extends "service" ? Promise<Job> : Promise<CandidateResult> {
+  ): Promise<
+    M extends "service" ? JobHandle : LocalRunHandle<CandidateResult>
+  > {
     this.assertOpen();
     return (
       this.client
@@ -68,10 +72,10 @@ export class Optimizer<M extends Execution = "local"> {
         : this.local!.baseline(study as StudyModel)
     ) as any;
   }
-  run(
+  async run(
     study: Model<M>,
     options: LocalRunOptions = {},
-  ): M extends "service" ? Promise<RunHandle> : LocalRunHandle {
+  ): Promise<M extends "service" ? RunHandle : LocalRunHandle> {
     this.assertOpen();
     return (
       this.client
@@ -79,14 +83,17 @@ export class Optimizer<M extends Execution = "local"> {
             population_size: options.populationSize,
             generations: options.generations,
             seed: options.seed,
+            threads: options.evaluationConcurrency,
           })
         : this.local!.run(study as StudyModel, options)
     ) as any;
   }
-  replay(
+  async replay(
     study: Model<M>,
     decisions: Decisions,
-  ): M extends "service" ? Promise<Job> : Promise<CandidateResult> {
+  ): Promise<
+    M extends "service" ? JobHandle : LocalRunHandle<CandidateResult>
+  > {
     this.assertOpen();
     return (
       this.client

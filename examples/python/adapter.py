@@ -6,7 +6,7 @@ import sys
 import time
 import urllib.request
 
-PROTOCOL = 'genetic-assembly-adapter-v2'
+PROTOCOL = 'genetic-assembly-adapter-v3'
 BASE = os.environ.get('GA_INTERNAL_URL', 'http://127.0.0.1:3001')
 
 def digest(value):
@@ -34,7 +34,7 @@ def evaluate(candidate, phase):
                       seed=seed, decisions=decisions, status='completed', metrics=metrics,
                       constraints={'domain_validity': 0}, warnings=[], repairs=[], cacheKey=key,
                       cached=False, runtimeMs=(time.monotonic()-started)*1000)
-        request('/v2/evaluations', record)
+        request('/v3/evaluations', record)
         measurements.append(metrics)
     return {'id': candidate['id'], 'genes': candidate['genes'], 'evaluation': {
         'objectives': [sum(m[g['metric']] for m in measurements)/len(measurements) for g in spec['objectives'].values()],

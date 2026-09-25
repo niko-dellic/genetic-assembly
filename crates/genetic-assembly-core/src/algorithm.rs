@@ -99,9 +99,7 @@ where
             break;
         }
         session.tell(evaluate(&requests)?)?;
-        if session.generation > 0
-            && observer(&session.checkpoint(), &session.summary()) == RunControl::Stop
-        {
+        if observer(&session.checkpoint(), &session.summary()) == RunControl::Stop {
             break;
         }
     }
@@ -308,6 +306,17 @@ impl SolverSession {
 
     pub fn summary(&self) -> GenerationSummary {
         summarize_generation(self.generation, self.evaluations, &self.population)
+    }
+
+    /// The exact surviving population at a committed generation boundary.
+    pub fn snapshot(&self) -> Result<PopulationSnapshot, SolverError> {
+        let result = self.result()?;
+        Ok(PopulationSnapshot {
+            generations: result.generations,
+            evaluations: result.evaluations,
+            pareto_front: result.pareto_front,
+            final_population: result.final_population,
+        })
     }
 
     pub fn result(&self) -> Result<OptimizationResult, SolverError> {

@@ -27,8 +27,8 @@ async function start() {
     if (stopped) return;
     optimizer = new Optimizer();
     state.value = "Evaluating baseline";
-    await optimizer.baseline(study);
-    run = optimizer.run(study, {
+    await (await optimizer.baseline(study)).completed();
+    run = await optimizer.run(study, {
       populationSize: population.value,
       generations: generations.value,
       seed: seed.value,
@@ -39,7 +39,7 @@ async function start() {
     try {
       const status = await run.wait();
       if (status.status === "completed")
-        results.value = run.results().validatedFront;
+        results.value = (await run.results()).validatedFront;
     } finally {
       unsubscribe();
     }

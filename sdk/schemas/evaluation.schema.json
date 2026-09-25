@@ -87,6 +87,38 @@
     "error": {
       "type": "string"
     },
+    "errorDetail": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "candidateId": {
+          "type": "string"
+        },
+        "seed": {
+          "type": "number"
+        },
+        "asset": {
+          "type": "string"
+        },
+        "cause": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "stage",
+        "message"
+      ],
+      "additionalProperties": false
+    },
     "cacheKey": {
       "type": "string"
     },

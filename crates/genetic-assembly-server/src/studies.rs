@@ -37,24 +37,24 @@ fn parse<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ApiError> {
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/v2/studies", get(list_studies).post(prepare))
-        .route("/v2/studies/{id}", get(get_study))
-        .route("/v2/studies/{id}/runs", get(list_runs).post(start))
-        .route("/v2/studies/{id}/jobs", get(list_jobs).post(create_job))
-        .route("/v2/runs/{id}", get(super::get_run))
-        .route("/v2/runs/{id}/cancel", post(super::cancel_run))
-        .route("/v2/runs/{id}/analytics", get(super::run_analytics))
-        .route("/v2/runs/{id}/results", get(results))
-        .route("/v2/runs/{id}/export", get(export))
-        .route("/v2/history/{id}", get(history))
-        .route("/v2/evaluations", post(record))
-        .route("/v2/cache/{key}", get(cache))
-        .route("/v2/datasets", get(datasets).post(register_dataset))
-        .route("/v2/datasets/{id}/resources/{*key}", get(resource))
-        .route("/v2/jobs/{id}", get(get_job))
-        .route("/v2/jobs/{id}/cancel", post(cancel_job))
-        .route("/v2/artifacts", post(super::create_artifact))
-        .route("/v2/artifacts/{id}", get(super::get_artifact))
+        .route("/v3/studies", get(list_studies).post(prepare))
+        .route("/v3/studies/{id}", get(get_study))
+        .route("/v3/studies/{id}/runs", get(list_runs).post(start))
+        .route("/v3/studies/{id}/jobs", get(list_jobs).post(create_job))
+        .route("/v3/runs/{id}", get(super::get_run))
+        .route("/v3/runs/{id}/cancel", post(super::cancel_run))
+        .route("/v3/runs/{id}/analytics", get(super::run_analytics))
+        .route("/v3/runs/{id}/results", get(results))
+        .route("/v3/runs/{id}/export", get(export))
+        .route("/v3/history/{id}", get(history))
+        .route("/v3/evaluations", post(record))
+        .route("/v3/cache/{key}", get(cache))
+        .route("/v3/datasets", get(datasets).post(register_dataset))
+        .route("/v3/datasets/{id}/resources/{*key}", get(resource))
+        .route("/v3/jobs/{id}", get(get_job))
+        .route("/v3/jobs/{id}/cancel", post(cancel_job))
+        .route("/v3/artifacts", post(super::create_artifact))
+        .route("/v3/artifacts/{id}", get(super::get_artifact))
         .route("/", get(inspector))
         .route("/inspector.js", get(inspector_js))
 }
@@ -78,8 +78,8 @@ async fn prepare(
     Json(input): Json<Value>,
 ) -> Result<Json<Value>, ApiError> {
     let spec = &input["spec"];
-    if spec["schemaVersion"] != 2 {
-        return Err(ApiError::BadRequest("study schemaVersion must be 2".into()));
+    if spec["schemaVersion"] != 3 {
+        return Err(ApiError::BadRequest("study schemaVersion must be 3".into()));
     }
     string(spec, "name")?;
     string(spec, "version")?;
@@ -109,7 +109,7 @@ async fn prepare(
         working_directory: runtime["workingDirectory"].as_str().map(PathBuf::from),
         environment,
         timeout_ms: runtime["timeoutMs"].as_u64().unwrap_or(300_000),
-        retry_limit: 1,
+        retry_limit: 0,
     };
     let (_, Json(adapter)) =
         super::create_adapter(State(state.clone()), Json(CreateAdapterRequest { launch })).await?;
@@ -262,12 +262,14 @@ async fn history(
     Ok(page(sqlx::query_scalar("SELECT data FROM study_evaluations WHERE owner_id=$1 AND ($2::text IS NULL OR phase=$2) AND ($3::text IS NULL OR status=$3) AND ($4::text IS NULL OR candidate_id=$4) ORDER BY created_at,id LIMIT 50 OFFSET $5").bind(id).bind(f.phase).bind(f.status).bind(f.candidate_id).bind(f.offset.max(0)).fetch_all(&s.db).await?,f.offset.max(0)))
 }
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Validated {
     candidate_id: String,
     decisions: Value,
     metrics: Value,
     constraints: Value,
     seed_count: usize,
+    feasible: bool,
 }
 async fn validated(s: &AppState, id: Uuid) -> Result<Value, ApiError> {
     let spec: Value = sqlx::query_scalar(
@@ -339,6 +341,9 @@ async fn validated(s: &AppState, id: Uuid) -> Result<Value, ApiError> {
             candidate_id,
             decisions: rows[0]["decisions"].clone(),
             metrics: Value::Object(metrics),
+            feasible: constraints
+                .values()
+                .all(|v| v.as_f64().unwrap_or(1.0) <= 0.0),
             constraints: Value::Object(constraints),
             seed_count: expected,
         });
@@ -381,24 +386,40 @@ async fn validated(s: &AppState, id: Uuid) -> Result<Value, ApiError> {
     };
     let front: Vec<_> = candidates
         .iter()
-        .filter(|b| !candidates.iter().any(|a| dominates(a, b)))
+        .filter(|b| b.feasible && !candidates.iter().any(|a| a.feasible && dominates(a, b)))
         .collect();
-    Ok(json!(front))
+    Ok(json!({"validated":candidates,"validatedFront":front}))
 }
 async fn results(
     State(s): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, ApiError> {
-    let Json(search) = super::run_results(State(s.clone()), Path(id)).await?;
+    let run = fetch_run(&s.db, id).await?;
+    if run.status != "completed" {
+        return Err(ApiError::Conflict(format!("run is {}", run.status)));
+    }
+    let committed:Option<(Value,Value)>=sqlx::query_as("SELECT snapshot,checkpoint FROM operation_generations WHERE owner_id=$1 ORDER BY generation DESC LIMIT 1").bind(id).fetch_optional(&s.db).await?;
+    let (snapshot, checkpoint) =
+        committed.ok_or_else(|| ApiError::Conflict("No committed generation".into()))?;
+    let population = checkpoint["population"]
+        .as_array()
+        .ok_or_else(|| ApiError::Internal("Invalid generation checkpoint".into()))?;
+    let front: Vec<_> = population.iter().filter(|c| c["rank"] == 0).collect();
+    let validation = validated(&s, id).await?;
     Ok(Json(
-        json!({"search":search,"validated":validated(&s,id).await?}),
+        json!({"search":{"generations":snapshot["generation"],"evaluations":snapshot["summary"]["evaluations"],"pareto_front":front,"final_population":population},"validated":validation["validated"],"validatedFront":validation["validatedFront"]}),
     ))
 }
 async fn export(
     State(s): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, ApiError> {
-    let Json(result) = results(State(s.clone()), Path(id)).await?;
+    let run = fetch_run(&s.db, id).await?;
+    let result = if run.status == "completed" {
+        results(State(s.clone()), Path(id)).await?.0
+    } else {
+        Value::Null
+    };
     let records: Vec<Value> = sqlx::query_scalar(
         "SELECT data FROM study_evaluations WHERE owner_id=$1 ORDER BY created_at,id",
     )
@@ -407,7 +428,7 @@ async fn export(
     .await?;
     let study:Value=sqlx::query_scalar("SELECT jsonb_build_object('id',s.id,'spec',s.spec,'runtime',s.runtime) FROM studies s JOIN study_runs r ON r.study_id=s.id WHERE r.run_id=$1").bind(id).fetch_one(&s.db).await?;
     Ok(Json(
-        json!({"schemaVersion":2,"study":study,"results":result,"evaluations":records,"datasets":sqlx::query_scalar::<_,Value>("SELECT data FROM study_datasets WHERE study_id=$1 ORDER BY created_at,id").bind(study["id"].as_str()).fetch_all(&s.db).await?}),
+        json!({"schemaVersion":3,"study":study,"results":result,"materializations":fetch_front_members(&s.db,id).await?,"evaluations":records,"datasets":sqlx::query_scalar::<_,Value>("SELECT data FROM study_datasets WHERE study_id=$1 ORDER BY created_at,id").bind(study["id"].as_str()).fetch_all(&s.db).await?}),
     ))
 }
 async fn register_dataset(
@@ -525,6 +546,7 @@ async fn one_job(s: &Arc<AppState>) -> Result<(), ApiError> {
     let Some((id, study_id, kind, request)) = job else {
         return Ok(());
     };
+    crate::observation::append(s, id, json!({"type":"phase","phase":kind})).await?;
     let outcome = execute_job(s, id, &study_id, &kind, &request).await;
     let (status, result, error) = match outcome {
         Ok(value) => ("completed", Some(value), None),
@@ -535,9 +557,10 @@ async fn one_job(s: &Arc<AppState>) -> Result<(), ApiError> {
         .bind(id)
         .bind(status)
         .bind(result)
-        .bind(error)
+        .bind(&error)
         .execute(&s.db)
         .await?;
+    crate::observation::append(s,id,json!({"type":status,"error":error.map(|message|json!({"code":"OPERATION_FAILED","stage":"evaluation","message":message}))})).await?;
     Ok(())
 }
 async fn execute_job(

@@ -1,3 +1,11 @@
+import { OptimizationError, errorDetail, type ErrorDetail } from "./errors.js";
+import {
+  page,
+  type PageOptions,
+  type OperationEvent,
+  type GenerationSnapshot,
+} from "./observation.js";
+import { bindWorkerStudy } from "./evaluator-worker.js";
 import {
   canonical,
   type Decisions,
@@ -31,6 +39,7 @@ export interface LocalRunOptions {
   generations?: number;
   seed?: number;
   validate?: boolean;
+  evaluationConcurrency?: number;
 }
 export interface CandidateResult {
   candidateId: string;
@@ -49,6 +58,7 @@ export interface LocalStatus {
   id: string;
   status: "queued" | "running" | "completed" | "failed" | "cancelled";
   error?: string;
+  errorDetail?: ErrorDetail;
   progress?: SolverProgress;
 }
 export async function digest(value: unknown) {
@@ -63,22 +73,28 @@ export async function digest(value: unknown) {
     .map((v) => v.toString(16).padStart(2, "0"))
     .join("");
 }
-export class LocalRunHandle {
+export class LocalRunHandle<T = LocalResults> {
   readonly id = crypto.randomUUID();
   engineVersion?: string;
   readonly controller = new AbortController();
   private state: LocalStatus = { id: this.id, status: "queued" };
   private listeners = new Set<(status: LocalStatus) => void>();
-  private output?: LocalResults;
+  private output?: T;
+  private journal: OperationEvent[] = [];
+  private snapshots: GenerationSnapshot[] = [];
+  private candidateResults = new Map<string, CandidateResult>();
+  private released = false;
+  private active = 0;
+  private queued = 0;
   private completion?: Promise<void>;
   constructor(
     readonly study: StudySpec,
     private store: MemoryStore,
-  ) {}
-  /** @internal */ schedule(
-    task: () => Promise<LocalResults>,
-    queue: Promise<unknown>,
+    readonly kind: "search" | "baseline" | "replay" = "search",
   ) {
+    this.store.retain(" ".repeat(8192));
+  }
+  /** @internal */ schedule(task: () => Promise<T>, queue: Promise<unknown>) {
     this.completion = queue
       .catch(() => {})
       .then(async () => {
@@ -95,7 +111,15 @@ export class LocalRunHandle {
         } catch (error) {
           this.update({
             status: this.controller.signal.aborted ? "cancelled" : "failed",
-            error: String(error),
+            error: String(error).slice(0, 1024),
+            errorDetail: Object.fromEntries(
+              Object.entries(errorDetail(error, "operation")).map(
+                ([key, value]) => [
+                  key,
+                  typeof value === "string" ? value.slice(0, 512) : value,
+                ],
+              ),
+            ) as unknown as ErrorDetail,
           });
         }
       });
@@ -103,46 +127,234 @@ export class LocalRunHandle {
   }
   /** @internal */ update(update: Partial<LocalStatus>) {
     this.state = { ...this.state, ...update };
+    if (
+      update.status &&
+      ["completed", "failed", "cancelled"].includes(update.status)
+    ) {
+      if (
+        this.journal.some((event) =>
+          ["completed", "failed", "cancelled"].includes(event.type),
+        )
+      )
+        return;
+      this.active = 0;
+      this.queued = 0;
+      this.emit(
+        {
+          type: update.status as "completed" | "failed" | "cancelled",
+          ...(this.state.errorDetail ? { error: this.state.errorDetail } : {}),
+        },
+        true,
+      );
+    }
     for (const listener of this.listeners) {
       try {
-        listener(this.status());
+        listener(structuredClone(this.state));
       } catch {
         /* Observers cannot change execution. */
       }
     }
   }
-  status() {
+  async status() {
     return structuredClone(this.state);
   }
   subscribe(listener: (status: LocalStatus) => void) {
     this.listeners.add(listener);
-    listener(this.status());
+    try {
+      listener(structuredClone(this.state));
+    } catch {
+      /* Observer errors are isolated. */
+    }
     return () => {
       this.listeners.delete(listener);
     };
   }
-  cancel() {
+  async cancel() {
+    if (["completed", "failed", "cancelled"].includes(this.state.status))
+      return;
     this.controller.abort();
     if (this.state.status === "queued") this.update({ status: "cancelled" });
   }
   /** @internal */
   release() {
-    this.cancel();
+    void this.cancel();
+    this.released = true;
+    this.journal = [];
+    this.snapshots = [];
+    this.candidateResults.clear();
     this.listeners.clear();
     this.output = undefined;
   }
   async wait() {
     await this.completion;
-    const status = this.status();
-    if (status.status === "failed") throw Error(status.error);
+    const status = await this.status();
+    if (status.status === "failed")
+      throw new OptimizationError(
+        status.errorDetail ?? errorDetail(status.error, "operation"),
+      );
     return status;
   }
-  results() {
+  async completed() {
+    await this.wait();
+    return this.results();
+  }
+  async results() {
     if (!this.output) throw Error("Results are not available");
     return structuredClone(this.output);
   }
-  history() {
-    return this.store.history(this.id);
+  /** @internal */ snapshotObservation() {
+    return structuredClone({
+      events: this.journal,
+      generations: this.snapshots,
+      candidates: [...this.candidateResults].map(([key, value]) => ({
+        phase: key.split(":")[0],
+        ...value,
+      })),
+    });
+  }
+  async history(options: PageOptions = {}) {
+    return page(this.store.history(this.id), options);
+  }
+  async generations(options: PageOptions = {}) {
+    return page(this.snapshots, options);
+  }
+  async candidates(
+    options: PageOptions & { phase?: string; generation?: number } = {},
+  ) {
+    const ids =
+      options.generation === undefined
+        ? undefined
+        : new Set(
+            this.snapshots
+              .filter((s) => s.generation <= options.generation!)
+              .flatMap((s) => s.evaluatedCandidateIds),
+          );
+    return page(
+      [...this.candidateResults]
+        .filter(([key]) => key.startsWith((options.phase ?? "search") + ":"))
+        .map(([, value]) => value)
+        .filter((value) => !ids || ids.has(value.candidateId))
+        .sort((a, b) =>
+          a.candidateId.localeCompare(b.candidateId, "en", { numeric: true }),
+        ),
+      options,
+    );
+  }
+  /** @internal */ candidate(phase: string, value: CandidateResult) {
+    this.store.retain(value);
+    this.candidateResults.set(
+      `${phase}:${value.candidateId}`,
+      structuredClone(value),
+    );
+  }
+  /** @internal */ queue(count: number) {
+    this.queued = count;
+  }
+  /** @internal */ emit(
+    event: Omit<
+      OperationEvent,
+      "sequence" | "operationId" | "active" | "queued"
+    >,
+    terminal = false,
+  ) {
+    if (this.released) return;
+    if (event.type === "evaluation-started") {
+      this.active++;
+      this.queued = Math.max(0, this.queued - 1);
+    }
+    if (
+      event.type === "evaluation-completed" ||
+      event.type === "evaluation-failed"
+    )
+      this.active = Math.max(0, this.active - 1);
+    const entry = {
+      ...event,
+      sequence: this.journal.length + 1,
+      operationId: this.id,
+      active: this.active,
+      queued: this.queued,
+    };
+    if (!terminal) this.store.retain(entry);
+    this.journal.push(structuredClone(entry));
+  }
+  /** @internal */ snapshot(
+    progress: SolverProgress,
+    batch: string[],
+    population: SolverIndividual[],
+  ) {
+    const candidates = [...this.candidateResults]
+      .filter(([key]) => key.startsWith("search:"))
+      .map(([, value]) => value)
+      .filter((c) => c.feasible)
+      .sort((a, b) =>
+        a.candidateId.localeCompare(b.candidateId, "en", { numeric: true }),
+      );
+    const snapshot: GenerationSnapshot = {
+      generation: progress.generation,
+      summary: progress,
+      evaluatedCandidateIds: batch,
+      population: population.map((c) => ({
+        candidateId: String(c.id),
+        rank: c.rank,
+        crowdingDistance: c.crowding_distance,
+      })),
+      paretoCandidateIds: population
+        .filter((c) => c.rank === 0 && c.constraint_violation <= 0)
+        .map((c) => String(c.id)),
+      discoveredParetoCandidateIds: candidates
+        .filter(
+          (c) => !candidates.some((other) => dominates(this.study, other, c)),
+        )
+        .map((c) => c.candidateId),
+    };
+    const event = {
+      type: "generation-completed" as const,
+      phase: "search" as const,
+      generation: progress.generation,
+    };
+    this.store.retain({
+      snapshot,
+      event: {
+        ...event,
+        sequence: this.journal.length + 1,
+        operationId: this.id,
+        active: this.active,
+        queued: this.queued,
+      },
+    });
+    this.snapshots.push(structuredClone(snapshot));
+    this.emit(event, true);
+  }
+  async *events(
+    options: { after?: number; signal?: AbortSignal } = {},
+  ): AsyncGenerator<OperationEvent> {
+    let cursor = options.after ?? 0;
+    if (!Number.isSafeInteger(cursor) || cursor < 0)
+      throw Error("Invalid event cursor");
+    for (;;) {
+      options.signal?.throwIfAborted();
+      for (const event of this.journal.filter((e) => e.sequence > cursor)) {
+        cursor = event.sequence;
+        yield structuredClone(event);
+      }
+      if (
+        this.released ||
+        ["completed", "failed", "cancelled"].includes(this.state.status)
+      )
+        return;
+      await new Promise<void>((resolve, reject) => {
+        const abort = () => {
+          clearTimeout(timer);
+          reject(options.signal?.reason);
+        };
+        const timer = setTimeout(() => {
+          options.signal?.removeEventListener("abort", abort);
+          resolve();
+        }, 25);
+        options.signal?.addEventListener("abort", abort, { once: true });
+        if (options.signal?.aborted) abort();
+      });
+    }
   }
 }
 export class LocalRuntime {
@@ -154,15 +366,26 @@ export class LocalRuntime {
     value: unknown;
   }[] = [];
   readonly studies = new Map<string, StudySpec>();
-  readonly runs = new Map<string, LocalRunHandle>();
+  readonly runs = new Map<string, LocalRunHandle<any>>();
   private queue: Promise<unknown> = Promise.resolve();
   private modelIds = new WeakMap<StudyModel, string>();
   private cache = new Map<string, EvaluationRecord>();
   private controllers = new Set<AbortController>();
   private closed = false;
+  private bindings = new Map<StudyModel, ReturnType<typeof bindWorkerStudy>>();
+  private defaultConcurrency: number;
+  private evaluator(model: StudyModel) {
+    let binding = this.bindings.get(model);
+    if (!binding) {
+      binding = bindWorkerStudy(model, this.concurrency);
+      this.bindings.set(model, binding);
+    }
+    return binding.model;
+  }
   constructor(
     private concurrency = 1,
     memoryLimitBytes?: number,
+    private solverWorkerFactory?: import("./solver.js").SolverWorkerFactory,
   ) {
     if (
       !Number.isSafeInteger(concurrency) ||
@@ -170,6 +393,7 @@ export class LocalRuntime {
       concurrency > 64
     )
       throw Error("evaluationConcurrency must be between 1 and 64");
+    this.defaultConcurrency = concurrency;
     this.store = new MemoryStore(memoryLimitBytes);
   }
   private assertOpen() {
@@ -199,6 +423,7 @@ export class LocalRuntime {
     const seeds =
       phase === "validation" ? spec.validationSeeds : spec.searchSeeds;
     const records: EvaluationRecord[] = [];
+    const operation = this.runs.get(ownerId);
     for (const seed of seeds) {
       signal.throwIfAborted();
       const cacheKey = await digest({
@@ -208,6 +433,7 @@ export class LocalRuntime {
         seed,
         phase,
       });
+      operation?.emit({ type: "evaluation-started", phase, candidateId, seed });
       const started = performance.now();
       let dataset: ReplayDataset | undefined;
       const record: EvaluationRecord = {
@@ -245,7 +471,7 @@ export class LocalRuntime {
             const mapped = mapMeasurements(
               spec,
               await abortable(
-                model.evaluate(
+                this.evaluator(model).evaluate(
                   structuredClone(decisions),
                   structuredClone(spec.inputs),
                   {
@@ -277,6 +503,10 @@ export class LocalRuntime {
       } catch (error) {
         record.status = "failed";
         record.error = String(error);
+        record.errorDetail = errorDetail(error, "evaluation", {
+          candidateId,
+          seed,
+        });
       }
       record.runtimeMs = performance.now() - started;
       if (dataset && record.status === "completed")
@@ -285,7 +515,19 @@ export class LocalRuntime {
       if (record.status === "completed" && phase === "search")
         this.cache.set(cacheKey, record);
       records.push(record);
-      if (record.status === "failed") throw Error(record.error);
+      operation?.emit({
+        type:
+          record.status === "failed"
+            ? "evaluation-failed"
+            : "evaluation-completed",
+        phase,
+        candidateId,
+        seed,
+        recordId: record.id,
+        ...(record.error ? { error: record.errorDetail } : {}),
+      });
+      if (record.status === "failed")
+        throw new OptimizationError(record.errorDetail!);
     }
     const average = (field: "metrics" | "constraints") =>
       Object.fromEntries(
@@ -296,7 +538,7 @@ export class LocalRuntime {
       );
     const metrics = average("metrics"),
       constraints = average("constraints");
-    return {
+    const result = {
       candidateId,
       decisions,
       metrics,
@@ -304,6 +546,8 @@ export class LocalRuntime {
       seedCount: records.length,
       feasible: Object.values(constraints).every((v) => v <= 0),
     } satisfies CandidateResult;
+    operation?.candidate(phase, result);
+    return result;
   }
   baseline(model: StudyModel, selected?: Decisions) {
     this.assertOpen();
@@ -312,46 +556,55 @@ export class LocalRuntime {
       this.store.retain(spec);
       this.studies.set(canonical(spec), spec);
     }
-    const controller = new AbortController(),
-      ownerId = crypto.randomUUID();
-    this.controllers.add(controller);
-    const operation = this.queue
-      .catch(() => {})
-      .then(async () => {
-        try {
-          const result = await this.evaluate(
-            model,
-            spec,
-            ownerId,
-            selected ? "selected" : "baseline",
-            selected ?? baselineDecisions(spec),
-            selected ? "replay" : "baseline",
-            controller.signal,
-          );
-          if (model.materialize && result.feasible) {
-            const value = await model.materialize(
-              { ...result.decisions },
-              structuredClone(spec.inputs),
-            );
-            const record = {
-              ownerId,
-              candidateId: result.candidateId,
-              decisions: result.decisions,
-              value: JSON.parse(canonical(value)),
-            };
-            this.store.retain(record);
-            this.materializations.push(record);
-          }
-          return result;
-        } finally {
-          this.controllers.delete(controller);
-        }
-      });
+    const handle = new LocalRunHandle<CandidateResult>(
+      spec,
+      this.store,
+      selected ? "replay" : "baseline",
+    );
+    this.runs.set(handle.id, handle);
+    const ownerId = handle.id,
+      controller = handle.controller;
+    const operation = handle.schedule(async () => {
+      handle.queue(spec.searchSeeds.length);
+      handle.emit({ type: "phase", phase: selected ? "replay" : "baseline" });
+      const result = await this.evaluate(
+        model,
+        spec,
+        ownerId,
+        selected ? "selected" : "baseline",
+        selected ?? baselineDecisions(spec),
+        selected ? "replay" : "baseline",
+        controller.signal,
+      );
+      if (model.materialize && result.feasible) {
+        const value = await model.materialize(
+          { ...result.decisions },
+          structuredClone(spec.inputs),
+        );
+        const record = {
+          ownerId,
+          candidateId: result.candidateId,
+          decisions: result.decisions,
+          value: JSON.parse(canonical(value)),
+        };
+        this.store.retain(record);
+        this.materializations.push(record);
+      }
+      return result;
+    }, this.queue);
     this.queue = operation;
-    return operation;
+    return handle;
   }
   run(model: StudyModel, options: LocalRunOptions = {}) {
     this.assertOpen();
+    const concurrency =
+      options.evaluationConcurrency ?? this.defaultConcurrency;
+    if (
+      !Number.isSafeInteger(concurrency) ||
+      concurrency < 1 ||
+      concurrency > 64
+    )
+      throw Error("evaluationConcurrency must be between 1 and 64");
     const spec = validateStudy(model);
     if (!this.studies.has(canonical(spec))) {
       this.store.retain(spec);
@@ -361,7 +614,12 @@ export class LocalRuntime {
     this.store.retain({ id: handle.id, options });
     this.runs.set(handle.id, handle);
     this.queue = handle.schedule(async () => {
-      const solver = new SolverWorker(),
+      if (this.concurrency !== concurrency) {
+        for (const binding of this.bindings.values()) binding.dispose();
+        this.bindings.clear();
+        this.concurrency = concurrency;
+      }
+      const solver = new SolverWorker(this.solverWorkerFactory),
         signal = handle.controller.signal;
       const cancel = () => solver.dispose();
       signal.addEventListener("abort", cancel, { once: true });
@@ -378,12 +636,14 @@ export class LocalRuntime {
           },
         });
         handle.engineVersion = engine.engineVersion;
+        handle.emit({ type: "phase", phase: "search" });
         while (true) {
           signal.throwIfAborted();
           const batch = await solver.call<SolverCandidate[] | null>({
             op: "ask",
           });
           if (!batch) break;
+          handle.queue(batch.length * spec.searchSeeds.length);
           const evaluated = new Array<SolverEvaluation>(batch.length);
           const batchController = new AbortController();
           const batchSignal = AbortSignal.any([signal, batchController.signal]);
@@ -434,12 +694,24 @@ export class LocalRuntime {
             op: "tell",
             candidates: evaluated,
           });
+          const snapshot = await solver.call<SolverResult>({ op: "snapshot" });
+          handle.snapshot(
+            progress,
+            batch.map((c) => String(c.id)),
+            snapshot.final_population,
+          );
           handle.update({ progress });
         }
         const search = await solver.call<SolverResult>({ op: "result" });
         // Checkpoints are service-only; local sessions export evidence, never resumable execution.
         delete (search as SolverResult & { checkpoint?: unknown }).checkpoint;
         const validated: CandidateResult[] = [];
+        if (options.validate !== false) {
+          handle.queue(
+            search.pareto_front.length * spec.validationSeeds.length,
+          );
+          handle.emit({ type: "phase", phase: "validation" });
+        }
         if (options.validate !== false)
           for (const candidate of search.pareto_front) {
             validated.push(
@@ -478,6 +750,8 @@ export class LocalRuntime {
   }
   dispose() {
     this.closed = true;
+    for (const binding of this.bindings.values()) binding.dispose();
+    this.bindings.clear();
     for (const run of this.runs.values()) run.release();
     this.runs.clear();
     for (const controller of this.controllers) controller.abort();

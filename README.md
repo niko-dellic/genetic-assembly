@@ -19,7 +19,7 @@ npm run pack
 In a separate project, with Node 22.12+:
 
 ```sh
-npm install /path/to/artifacts/genetic-assembly-sdk-0.4.0.tgz /path/to/artifacts/genetic-assembly-cli-0.4.0.tgz
+npm install /path/to/artifacts/genetic-assembly-sdk-0.5.0.tgz /path/to/artifacts/genetic-assembly-cli-0.5.0.tgz
 npx ga init
 npm run ga:check
 npm run ga:baseline
@@ -68,8 +68,8 @@ npm run docs:test
 
 The consumer suite installs tarballs outside the checkout and tests Docker setup, grabm child processes, durable datasets, repeatability, history integrity, cancellation and restart.
 
-Data uses the new `ga-<project>-v2` namespace. Old development volumes are left intact. Use `ga backup DIRECTORY` before explicit cleanup. [Backend setup](docs/backend.md) documents ports, volumes, remote runtimes and disposal.
+Data uses the new `ga-<project>-v5` namespace. Old development volumes are left intact. Use `ga backup DIRECTORY` before explicit cleanup. [Backend setup](docs/backend.md) documents ports, volumes, remote runtimes and disposal.
 
-The local companion executes trusted application code. Keep it on localhost or deploy behind suitable authentication. The browser client observes and controls studies; solving remains in the Rust companion.
+The local companion executes trusted application code. Keep it on localhost or deploy behind suitable authentication. Local browser execution runs the Rust solver as packaged WASM in a worker. Service execution runs it in the Rust companion; the browser observes and controls durable jobs.
 
 MIT licensed.

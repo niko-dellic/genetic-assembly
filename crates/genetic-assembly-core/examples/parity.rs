@@ -41,17 +41,21 @@ fn main() {
         })
     };
     let started = std::time::Instant::now();
+    let mut snapshots = Vec::new();
     let result = run_nsga2(
         problem.clone(),
         config.clone(),
         &evaluator,
         None,
         &AtomicBool::new(false),
-        |_, _| RunControl::Continue,
+        |checkpoint, summary| {
+            snapshots.push(serde_json::json!({"generation":summary.generation,"population":checkpoint.population,"summary":summary}));
+            RunControl::Continue
+        },
     )
     .unwrap();
     println!(
         "{}",
-        serde_json::json!({"problem":problem,"config":config,"result":result,"nativeMs":started.elapsed().as_secs_f64()*1000.0})
+        serde_json::json!({"problem":problem,"config":config,"result":result,"snapshots":snapshots,"nativeMs":started.elapsed().as_secs_f64()*1000.0})
     );
 }

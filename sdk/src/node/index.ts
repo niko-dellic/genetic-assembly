@@ -1,4 +1,11 @@
-import {mapMeasurements, repairDesign} from "../model.js";
+import {
+  EvaluatorPool,
+  serveEvaluator,
+  type EvaluatorWorker,
+  type EvaluationWorkerPort,
+} from "../evaluator-worker.js";
+import { errorDetail } from "../errors.js";
+import { mapMeasurements, repairDesign } from "../model.js";
 import type { ReplayDataset } from "../model.js";
 import { createHash } from "node:crypto";
 import { createInterface } from "node:readline";
@@ -67,11 +74,13 @@ export function defineStudy(model: StudyModel): StudyModel {
 export const hash = (value: unknown) =>
   createHash("sha256").update(canonical(value)).digest("hex");
 function constraintValues(spec: StudySpec, metrics: Record<string, number>) {
-  const {domain_validity: _, ...values} = mapMeasurements(spec, {metrics}).constraints;
+  const { domain_validity: _, ...values } = mapMeasurements(spec, {
+    metrics,
+  }).constraints;
   return values;
 }
 function objectiveValues(spec: StudySpec, metrics: Record<string, number>) {
-  return mapMeasurements(spec, {metrics}).objectives;
+  return mapMeasurements(spec, { metrics }).objectives;
 }
 /** Exercise the configured baseline, repair and goal mapping twice without a backend. */
 export async function checkStudy(model: StudyModel) {
@@ -105,7 +114,9 @@ export async function checkStudy(model: StudyModel) {
           signal: AbortSignal.timeout(120000),
           directory,
           retainReplay: false,
-          retainDataset() { throw Error("Replay retention was not requested"); },
+          retainDataset() {
+            throw Error("Replay retention was not requested");
+          },
         }),
       );
       objectiveValues(spec, measurement.metrics);
@@ -140,7 +151,7 @@ async function uploadDataset(
       if (entry.isDirectory()) await walk(path);
       else {
         const bytes = await readFile(path);
-        const response = await fetch(client.baseUrl + "/v2/artifacts", {
+        const response = await fetch(client.baseUrl + "/v3/artifacts", {
           method: "POST",
           headers: {
             "content-type": "application/octet-stream",
@@ -168,14 +179,66 @@ async function uploadDataset(
     runHash: reference.runHash,
     resources,
   };
-  await client.request("/v2/datasets", {
+  await client.request("/v3/datasets", {
     method: "POST",
     body: JSON.stringify(dataset),
   });
   return dataset.id;
 }
+/** Serve a prepared module in one reusable evaluation slot. Dataset hooks run in that same slot. */
+export function serveStudyEvaluator(
+  model: StudyModel,
+  port: EvaluationWorkerPort,
+) {
+  serveEvaluator(async (decisions, inputs, portable) => {
+    if (!portable.directory)
+      throw Error("Service evaluation requires a scratch directory");
+    const context = { ...portable, directory: portable.directory };
+    const measurement = await model.evaluate(decisions, inputs, context);
+    if (context.retainReplay && model.dataset) {
+      const reference = await model.dataset(context);
+      if (reference) {
+        const resources: Record<string, Uint8Array> = {};
+        async function walk(directory: string): Promise<void> {
+          for (const entry of await readdir(directory, {
+            withFileTypes: true,
+          })) {
+            const path = join(directory, entry.name);
+            if (entry.isSymbolicLink())
+              throw Error("Dataset resources cannot be symbolic links");
+            if (entry.isDirectory()) await walk(path);
+            else
+              resources[
+                relative(reference!.directory, path).split("\\").join("/")
+              ] = await readFile(path);
+          }
+        }
+        await walk(reference.directory);
+        context.retainDataset({ ...reference, resources });
+      }
+    }
+    return measurement;
+  }, port);
+}
 /** Execute the versioned adapter protocol. The managed CLI supplies snapshot identity and backend connectivity. */
-export async function serveStudy(model: StudyModel): Promise<void> {
+export async function serveStudy(
+  model: StudyModel,
+  options: {
+    createWorker?: () => EvaluatorWorker;
+    mode?: "pooled" | "isolated";
+  } = {},
+): Promise<void> {
+  const requested = Number(process.env.GA_EVALUATION_CONCURRENCY ?? 1);
+  if (!Number.isSafeInteger(requested) || requested < 1 || requested > 64)
+    throw Error("Invalid service evaluation concurrency");
+  const concurrency = options.createWorker ? requested : 1;
+  const pool = options.createWorker
+    ? new EvaluatorPool(
+        options.createWorker,
+        concurrency,
+        options.mode === "isolated",
+      )
+    : undefined;
   const spec = validateStudy(model);
   const client = new StudyClient(
     process.env.GA_INTERNAL_URL ?? "http://127.0.0.1:3001",
@@ -184,6 +247,15 @@ export async function serveStudy(model: StudyModel): Promise<void> {
   let ownerId = "";
   let studyId = process.env.GA_STUDY_ID ?? "";
   let identity = process.env.GA_RUNTIME_ID ?? hash(spec);
+  let active = 0,
+    queued = 0;
+  let batchController = new AbortController();
+  async function event(value: Record<string, unknown>) {
+    await client.request(`/v3/operations/${ownerId}/events`, {
+      method: "POST",
+      body: JSON.stringify({ ...value, active, queued }),
+    });
+  }
   async function evaluate(
     candidateId: string,
     raw: Decisions,
@@ -218,12 +290,24 @@ export async function serveStudy(model: StudyModel): Promise<void> {
       const directory = join(tmpdir(), "ga-evaluation-" + record.id);
       await mkdir(directory, { recursive: true });
       const start = performance.now();
+      queued = Math.max(0, queued - 1);
+      active++;
+      await event({ type: "evaluation-started", phase, candidateId, seed });
       let retained: ReplayDataset | undefined;
       const context: EvaluationContext = {
-        retainDataset(dataset) { if (phase !== "baseline" && phase !== "replay") throw Error("Replay retention was not requested"); if (retained) throw Error("Only one dataset per evaluation is supported"); retained = structuredClone(dataset); },
+        retainDataset(dataset) {
+          if (phase !== "baseline" && phase !== "replay")
+            throw Error("Replay retention was not requested");
+          if (retained)
+            throw Error("Only one dataset per evaluation is supported");
+          retained = structuredClone(dataset);
+        },
         seed,
         phase,
-        signal: AbortSignal.timeout(120000),
+        signal: AbortSignal.any([
+          AbortSignal.timeout(120000),
+          batchController.signal,
+        ]),
         directory,
         retainReplay: phase === "baseline" || phase === "replay",
       };
@@ -234,12 +318,12 @@ export async function serveStudy(model: StudyModel): Promise<void> {
           const cached = context.retainReplay
             ? null
             : await client.request<EvaluationRecord | null>(
-                `/v2/cache/${cacheKey}`,
+                `/v3/cache/${cacheKey}`,
               );
           const measured = cached
             ? { metrics: cached.metrics, warnings: cached.warnings }
             : measurementSchema.parse(
-                await model.evaluate(
+                await (pool ?? model).evaluate(
                   repaired.decisions,
                   structuredClone(spec.inputs),
                   context,
@@ -255,14 +339,24 @@ export async function serveStudy(model: StudyModel): Promise<void> {
           };
           if (context.retainReplay && retained) {
             for (const [key, bytes] of Object.entries(retained.resources)) {
-              if (!key || key.startsWith('/') || key.includes('\\') || key.split('/').some(part => !part || part === '..')) throw Error('Unsafe replay resource path');
+              if (
+                !key ||
+                key.startsWith("/") ||
+                key.includes("\\") ||
+                key.split("/").some((part) => !part || part === "..")
+              )
+                throw Error("Unsafe replay resource path");
               const path = join(directory, key);
-              await mkdir(dirname(path), {recursive: true});
+              await mkdir(dirname(path), { recursive: true });
               await writeFile(path, bytes);
             }
-            record.datasetId = await uploadDataset(client, {...retained, directory}, record);
+            record.datasetId = await uploadDataset(
+              client,
+              { ...retained, directory },
+              record,
+            );
           }
-          if (context.retainReplay && model.dataset) {
+          if (context.retainReplay && model.dataset && !pool) {
             const reference = await model.dataset(context);
             if (reference)
               record.datasetId = await uploadDataset(client, reference, record);
@@ -272,11 +366,27 @@ export async function serveStudy(model: StudyModel): Promise<void> {
       } catch (error) {
         record.status = "failed";
         record.error = String(error);
+        record.errorDetail = errorDetail(error, "evaluation", {
+          candidateId,
+          seed,
+        });
       } finally {
         record.runtimeMs = performance.now() - start;
-        await client.request("/v2/evaluations", {
+        await client.request("/v3/evaluations", {
           method: "POST",
           body: JSON.stringify(record),
+        });
+        active--;
+        await event({
+          type:
+            record.status === "failed"
+              ? "evaluation-failed"
+              : "evaluation-completed",
+          phase,
+          candidateId,
+          seed,
+          recordId: record.id,
+          ...(record.error ? { error: record.errorDetail } : {}),
         });
         await rm(directory, { recursive: true, force: true });
       }
@@ -307,106 +417,143 @@ export async function serveStudy(model: StudyModel): Promise<void> {
       },
     };
   }
-  if (process.env.GA_JOB_REQUEST) {
-    const job = JSON.parse(process.env.GA_JOB_REQUEST);
-    ownerId = job.id;
-    studyId = job.studyId;
-    identity = job.identity;
-    const decisions = job.decisions ?? baselineDecisions(spec);
-    const evaluated = await evaluate(
-      job.candidateId ?? (job.kind === "baseline" ? "baseline" : "selected"),
-      decisions,
-      job.kind,
-    );
-    const canonicalDecisions = decodeDecisions(spec, evaluated.genes);
-    const materialization =
-      (await model.materialize?.(canonicalDecisions, spec.inputs)) ??
-      canonicalDecisions;
-    process.stdout.write(
-      JSON.stringify({ decisions: canonicalDecisions, materialization }) + "\n",
-    );
-    return;
-  }
-  const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
-  for await (const line of lines) {
-    let request: any;
-    try {
-      request = JSON.parse(line);
-      if (request.protocol_version !== ADAPTER_PROTOCOL_VERSION)
-        throw Error("Unsupported adapter protocol");
-      let response: any;
-      if (request.type === "initialize") {
-        ownerId = request.run_id;
-        studyId = request.problem.metadata.studyId;
-        identity = request.problem.metadata.runtimeIdentity;
-        if (canonical(request.problem.metadata.study) !== canonical(spec))
-          throw Error(
-            "Model definition does not match immutable study revision",
-          );
-        response = {
-          type: "initialized",
-          adapter_version: identity,
-          capabilities: {
-            operator_mode: "builtin",
-            max_concurrency: 1,
-            validate_front: true,
-            materialize: true,
-          },
-        };
-      } else if (
-        request.type === "evaluate_batch" ||
-        request.type === "validate_front"
-      ) {
-        const candidates = [];
-        for (const c of request.candidates)
-          candidates.push({
-            id: c.id,
-            ...(await evaluate(
-              String(c.id),
-              decodeDecisions(spec, c.genes),
-              request.type === "validate_front" ? "validation" : "search",
-            )),
-          });
-        response = {
-          type:
-            request.type === "validate_front"
-              ? "front_validated"
-              : "batch_evaluated",
-          candidates,
-        };
-      } else if (request.type === "materialize") {
-        const candidates = [];
-        for (const c of request.candidates) {
-          const decisions = decodeDecisions(spec, c.genes);
-          candidates.push({
-            id: c.id,
-            media_type: "application/json",
-            data:
-              (await model.materialize?.(decisions, spec.inputs)) ?? decisions,
-          });
-        }
-        response = { type: "materialized", candidates };
-      } else if (request.type === "shutdown") response = { type: "shutdown" };
-      else if (request.type === "cancel") response = { type: "cancelled" };
-      else throw Error("Unknown request " + request.type);
-      process.stdout.write(
-        JSON.stringify({
-          protocol_version: ADAPTER_PROTOCOL_VERSION,
-          request_id: request.request_id,
-          ...response,
-        }) + "\n",
+  try {
+    if (process.env.GA_JOB_REQUEST) {
+      const job = JSON.parse(process.env.GA_JOB_REQUEST);
+      ownerId = job.id;
+      studyId = job.studyId;
+      identity = job.identity;
+      const decisions = job.decisions ?? baselineDecisions(spec);
+      queued = spec.searchSeeds.length;
+      const evaluated = await evaluate(
+        job.candidateId ?? (job.kind === "baseline" ? "baseline" : "selected"),
+        decisions,
+        job.kind,
       );
-      if (request.type === "shutdown") break;
-    } catch (error) {
+      const canonicalDecisions = decodeDecisions(spec, evaluated.genes);
+      const materialization =
+        (await model.materialize?.(canonicalDecisions, spec.inputs)) ??
+        canonicalDecisions;
       process.stdout.write(
-        JSON.stringify({
-          protocol_version: ADAPTER_PROTOCOL_VERSION,
-          request_id: request?.request_id,
-          type: "error",
-          retryable: false,
-          message: String(error),
-        }) + "\n",
+        JSON.stringify({ decisions: canonicalDecisions, materialization }) +
+          "\n",
       );
+      return;
     }
+    const lines = createInterface({
+      input: process.stdin,
+      crlfDelay: Infinity,
+    });
+    for await (const line of lines) {
+      let request: any;
+      try {
+        request = JSON.parse(line);
+        if (request.protocol_version !== ADAPTER_PROTOCOL_VERSION)
+          throw Error("Unsupported adapter protocol");
+        let response: any;
+        if (request.type === "initialize") {
+          ownerId = request.run_id;
+          studyId = request.problem.metadata.studyId;
+          identity = request.problem.metadata.runtimeIdentity;
+          if (canonical(request.problem.metadata.study) !== canonical(spec))
+            throw Error(
+              "Model definition does not match immutable study revision",
+            );
+          response = {
+            type: "initialized",
+            adapter_version: identity,
+            capabilities: {
+              operator_mode: "builtin",
+              max_concurrency: concurrency,
+              validate_front: true,
+              materialize: true,
+            },
+          };
+        } else if (
+          request.type === "evaluate_batch" ||
+          request.type === "validate_front"
+        ) {
+          const phase =
+            request.type === "validate_front" ? "validation" : "search";
+          queued =
+            request.candidates.length *
+            (phase === "validation"
+              ? spec.validationSeeds.length
+              : spec.searchSeeds.length);
+          await event({ type: "phase", phase });
+          const candidates = new Array(request.candidates.length);
+          let next = 0;
+          batchController = new AbortController();
+          const outcomes = await Promise.allSettled(
+            Array.from(
+              { length: Math.min(concurrency, candidates.length) },
+              async () => {
+                while (next < candidates.length) {
+                  const index = next++,
+                    c = request.candidates[index];
+                  candidates[index] = {
+                    id: c.id,
+                    ...(await evaluate(
+                      String(c.id),
+                      decodeDecisions(spec, c.genes),
+                      phase,
+                    ).catch((error) => {
+                      batchController.abort(error);
+                      throw error;
+                    })),
+                  };
+                }
+              },
+            ),
+          );
+          const failure = outcomes.find(
+            (result) => result.status === "rejected",
+          );
+          if (failure?.status === "rejected") throw failure.reason;
+          response = {
+            type:
+              request.type === "validate_front"
+                ? "front_validated"
+                : "batch_evaluated",
+            candidates,
+          };
+        } else if (request.type === "materialize") {
+          const candidates = [];
+          for (const c of request.candidates) {
+            const decisions = decodeDecisions(spec, c.genes);
+            candidates.push({
+              id: c.id,
+              media_type: "application/json",
+              data:
+                (await model.materialize?.(decisions, spec.inputs)) ??
+                decisions,
+            });
+          }
+          response = { type: "materialized", candidates };
+        } else if (request.type === "shutdown") response = { type: "shutdown" };
+        else if (request.type === "cancel") response = { type: "cancelled" };
+        else throw Error("Unknown request " + request.type);
+        process.stdout.write(
+          JSON.stringify({
+            protocol_version: ADAPTER_PROTOCOL_VERSION,
+            request_id: request.request_id,
+            ...response,
+          }) + "\n",
+        );
+        if (request.type === "shutdown") break;
+      } catch (error) {
+        process.stdout.write(
+          JSON.stringify({
+            protocol_version: ADAPTER_PROTOCOL_VERSION,
+            request_id: request?.request_id,
+            type: "error",
+            retryable: false,
+            message: String(error),
+          }) + "\n",
+        );
+      }
+    }
+  } finally {
+    pool?.dispose();
   }
 }

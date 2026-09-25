@@ -214,7 +214,15 @@ async fn execute_run_inner(
             resume,
             &solve_cancel,
             |checkpoint, summary| {
-                let _ = progress_tx.send((checkpoint.clone(), summary.clone()));
+                let (committed, confirmation) = std::sync::mpsc::sync_channel(1);
+                if progress_tx
+                    .send((checkpoint.clone(), summary.clone(), committed))
+                    .is_err()
+                    || confirmation.recv().is_err()
+                {
+                    solve_cancel.store(true, Ordering::Relaxed);
+                    return RunControl::Stop;
+                }
                 if solve_cancel.load(Ordering::Relaxed) {
                     RunControl::Stop
                 } else {
@@ -226,10 +234,9 @@ async fn execute_run_inner(
 
     let persistence_state = state.clone();
     let persist_bindings = bindings.clone();
-    let persist_cancel = cancellation.clone();
     let persistence_task = tokio::spawn(async move {
-        while let Some((checkpoint, summary)) = progress_rx.recv().await {
-            persist_summary(&persistence_state, run_id, &summary).await?;
+        while let Some((checkpoint, summary, committed)) = progress_rx.recv().await {
+            persist_checkpoint(&persistence_state, run_id, &persist_bindings, &checkpoint).await?;
             emit_event(
                 &persistence_state,
                 RunEvent::Generation {
@@ -239,19 +246,14 @@ async fn execute_run_inner(
             )
             .await
             .map_err(|error| error.to_string())?;
-            if summary.generation % 5 == 0 || persist_cancel.load(Ordering::Relaxed) {
-                persist_checkpoint(&persistence_state, run_id, &persist_bindings, &checkpoint)
-                    .await?;
-            }
+            let _ = committed.send(());
         }
         Ok::<(), String>(())
     });
 
-    let result = solve_task
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
+    let outcome = solve_task.await.map_err(|e| e.to_string())?;
     persistence_task.await.map_err(|e| e.to_string())??;
+    let result = outcome.map_err(|e| e.to_string())?;
     persist_checkpoint(&state, run.id, &bindings, &result.checkpoint).await?;
 
     let result_key = format!("runs/{}/result.msgpack.zst", run.id);
@@ -342,11 +344,15 @@ async fn execute_generic_run_inner(
     let bundle = problem_row
         .parsed_bundle()
         .map_err(|error| error.to_string())?;
-    let launch = adapter_row
+    let mut launch = adapter_row
         .parsed_launch()
         .map_err(|error| error.to_string())?;
     let config: Nsga2Config =
         serde_json::from_value(run.config.clone()).map_err(|error| error.to_string())?;
+    launch.environment.insert(
+        "GA_EVALUATION_CONCURRENCY".into(),
+        config.threads.unwrap_or(1).clamp(1, 64).to_string(),
+    );
     let problem = bundle.problem.clone();
     let bindings = BTreeMap::from([
         ("kind".into(), "adapter".into()),
@@ -400,7 +406,15 @@ async fn execute_generic_run_inner(
                 resume,
                 &solve_cancel,
                 |checkpoint, summary| {
-                    let _ = progress_tx.send((checkpoint.clone(), summary.clone()));
+                    let (committed, confirmation) = std::sync::mpsc::sync_channel(1);
+                    if progress_tx
+                        .send((checkpoint.clone(), summary.clone(), committed))
+                        .is_err()
+                        || confirmation.recv().is_err()
+                    {
+                        solve_cancel.store(true, Ordering::Relaxed);
+                        return RunControl::Stop;
+                    }
                     if solve_cancel.load(Ordering::Relaxed) {
                         RunControl::Stop
                     } else {
@@ -467,10 +481,9 @@ async fn execute_generic_run_inner(
 
     let persistence_state = state.clone();
     let persist_bindings = bindings.clone();
-    let persist_cancel = cancellation.clone();
     let persistence_task = tokio::spawn(async move {
-        while let Some((checkpoint, summary)) = progress_rx.recv().await {
-            persist_summary(&persistence_state, run_id, &summary).await?;
+        while let Some((checkpoint, summary, committed)) = progress_rx.recv().await {
+            persist_checkpoint(&persistence_state, run_id, &persist_bindings, &checkpoint).await?;
             emit_event(
                 &persistence_state,
                 RunEvent::Generation {
@@ -480,18 +493,16 @@ async fn execute_generic_run_inner(
             )
             .await
             .map_err(|error| error.to_string())?;
-            if summary.generation % 5 == 0 || persist_cancel.load(Ordering::Relaxed) {
-                persist_checkpoint(&persistence_state, run_id, &persist_bindings, &checkpoint)
-                    .await?;
-            }
+            let _ = committed.send(());
         }
         Ok::<(), String>(())
     });
 
-    let (result, mut materializations) = solve_task.await.map_err(|error| error.to_string())??;
+    let outcome = solve_task.await.map_err(|error| error.to_string())?;
     persistence_task
         .await
         .map_err(|error| error.to_string())??;
+    let (result, mut materializations) = outcome?;
     persist_checkpoint(&state, run.id, &bindings, &result.checkpoint).await?;
 
     for materialization in &mut materializations {
@@ -582,31 +593,6 @@ async fn execute_generic_run_inner(
     Ok(())
 }
 
-async fn persist_summary(
-    state: &AppState,
-    run_id: Uuid,
-    summary: &genetic_assembly_core::GenerationSummary,
-) -> Result<(), String> {
-    let json = serde_json::to_value(summary).map_err(|e| e.to_string())?;
-    let mut transaction = state.db.begin().await.map_err(|e| e.to_string())?;
-    sqlx::query(
-        r#"
-      INSERT INTO generation_summaries(run_id,generation,summary) VALUES($1,$2,$3)
-      ON CONFLICT(run_id,generation) DO UPDATE SET summary=excluded.summary
-    "#,
-    )
-    .bind(run_id)
-    .bind(summary.generation as i32)
-    .bind(json)
-    .execute(&mut *transaction)
-    .await
-    .map_err(|e| e.to_string())?;
-    sqlx::query("UPDATE runs SET current_generation=$2, lease_expires_at=now()+interval '2 minutes' WHERE id=$1")
-        .bind(run_id).bind(summary.generation as i32).execute(&mut *transaction).await.map_err(|e| e.to_string())?;
-    transaction.commit().await.map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 async fn persist_checkpoint(
     state: &AppState,
     run_id: Uuid,
@@ -630,13 +616,23 @@ async fn persist_checkpoint(
         .put(&key, compressed)
         .await
         .map_err(|e| e.to_string())?;
-    sqlx::query("UPDATE runs SET checkpoint_key=$2, current_generation=$3 WHERE id=$1")
-        .bind(run_id)
-        .bind(&key)
-        .bind(checkpoint.generation as i32)
-        .execute(&state.db)
+    let summary = genetic_assembly_core::summarize_generation(
+        checkpoint.generation,
+        ((checkpoint.generation + 1) * checkpoint.config.population_size) as u64,
+        &checkpoint.population,
+    );
+    let snapshot = crate::observation::snapshot(state, run_id, checkpoint, &summary).await?;
+    let mut tx = state.db.begin().await.map_err(|e| e.to_string())?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
+        .bind(run_id.to_string())
+        .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+    sqlx::query("INSERT INTO operation_generations(owner_id,generation,snapshot,checkpoint) VALUES($1,$2,$3,$4) ON CONFLICT(owner_id,generation) DO NOTHING").bind(run_id).bind(checkpoint.generation as i32).bind(&snapshot).bind(serde_json::to_value(checkpoint).map_err(|e|e.to_string())?).execute(&mut *tx).await.map_err(|e|e.to_string())?;
+    sqlx::query("INSERT INTO generation_summaries(run_id,generation,summary) VALUES($1,$2,$3) ON CONFLICT(run_id,generation) DO NOTHING").bind(run_id).bind(checkpoint.generation as i32).bind(serde_json::to_value(&summary).map_err(|e|e.to_string())?).execute(&mut *tx).await.map_err(|e|e.to_string())?;
+    sqlx::query("UPDATE runs SET checkpoint_key=$2,current_generation=$3,lease_expires_at=now()+interval '2 minutes' WHERE id=$1").bind(run_id).bind(&key).bind(checkpoint.generation as i32).execute(&mut *tx).await.map_err(|e|e.to_string())?;
+    sqlx::query("INSERT INTO operation_events(owner_id,event_key,event) VALUES($1,$2,$3) ON CONFLICT(owner_id,event_key) DO NOTHING").bind(run_id).bind(format!("generation-{}",checkpoint.generation)).bind(serde_json::json!({"operationId":run_id,"type":"generation-completed","phase":"search","generation":checkpoint.generation,"active":0,"queued":0})).execute(&mut *tx).await.map_err(|e|e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
     let already_emitted = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM run_events WHERE run_id=$1 AND event->>'type'='checkpoint' AND (event->>'generation')::bigint=$2)",
     )

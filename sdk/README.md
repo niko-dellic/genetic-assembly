@@ -12,10 +12,10 @@ const study = defineStudy({
 })
 const optimizer = new Optimizer()
 try {
-  await optimizer.baseline(study)
-  const run = optimizer.run(study,{populationSize:12,generations:4,seed:42})
+  await (await optimizer.baseline(study)).completed()
+  const run = await optimizer.run(study,{populationSize:12,generations:4,seed:42})
   await run.wait()
-  console.log(run.results())
+  console.log(await run.results())
   const bytes = await optimizer.export()
 } finally { optimizer.dispose() }
 ```

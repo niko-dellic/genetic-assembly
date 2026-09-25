@@ -1,6 +1,6 @@
-# Adapter protocol v2
+# Adapter protocol v3
 
-`genetic-assembly-adapter-v2` is newline-delimited JSON over a trusted child process's stdin/stdout. Stdout is protocol-only; diagnostics go to stderr. Every envelope contains `protocol_version`, `request_id`, and `type`. Responses must preserve the request ID.
+`genetic-assembly-adapter-v3` is newline-delimited JSON over a trusted child process's stdin/stdout. Stdout is protocol-only; diagnostics go to stderr. Every envelope contains `protocol_version`, `request_id`, and `type`. Responses must preserve the request ID.
 
 ## Lifecycle
 
@@ -29,4 +29,4 @@ External adapters own concurrency. A Node adapter may use worker threads or subp
 
 ## Study evaluation history
 
-A study adapter records each seed-level measurement at `/v2/evaluations` before returning an evaluated batch. Owner ID, candidate ID, phase and seed determine an idempotent record identity. The registered problem metadata contains `study`, `studyId` and `runtimeIdentity`. Ordered variable IDs and objectives are authoritative; do not rely on JSON object ordering. The [Node SDK](./api-reference/node/index.md) handles this automatically.
+A study adapter records each seed-level measurement at `/v3/evaluations` before returning an evaluated batch. Owner ID, candidate ID, phase and seed determine an idempotent record identity. The registered problem metadata contains `study`, `studyId` and `runtimeIdentity`. Ordered variable IDs and objectives are authoritative; do not rely on JSON object ordering. The [Node SDK](./api-reference/node/index.md) handles this automatically.

@@ -1,10 +1,13 @@
+import { OptimizationError } from "./errors.js";
 import type { EvaluationRecord } from "./contracts.js";
 import type { ReplayDataset } from "./model.js";
-export class RetainedDataLimitError extends Error {
+export class RetainedDataLimitError extends OptimizationError {
   constructor(public limit: number) {
-    super(
-      `Retained data exceeds ${limit} bytes. Export or dispose this optimizer, reduce retained data, or explicitly increase memoryLimitBytes.`,
-    );
+    super({
+      code: "MEMORY_LIMIT",
+      stage: "storage",
+      message: `Retained data exceeds ${limit} bytes. Export or dispose this optimizer, reduce retained data, or explicitly increase memoryLimitBytes.`,
+    });
     this.name = "RetainedDataLimitError";
   }
 }
@@ -36,10 +39,17 @@ export class MemoryStore {
     const replay = dataset && structuredClone(dataset);
     let size = new TextEncoder().encode(JSON.stringify(copy)).length;
     if (replay) {
-      if (typeof replay.manifestKey !== "string" || typeof replay.runHash !== "string") throw Error("Dataset identity must contain strings");
-      size += new TextEncoder().encode(replay.manifestKey + replay.runHash).length;
+      if (
+        typeof replay.manifestKey !== "string" ||
+        typeof replay.runHash !== "string"
+      )
+        throw Error("Dataset identity must contain strings");
+      size += new TextEncoder().encode(
+        replay.manifestKey + replay.runHash,
+      ).length;
       for (const [path, bytes] of Object.entries(replay.resources)) {
-        if (!(bytes instanceof Uint8Array)) throw Error("Dataset resources must be Uint8Array bytes");
+        if (!(bytes instanceof Uint8Array))
+          throw Error("Dataset resources must be Uint8Array bytes");
         if (
           !path ||
           path.startsWith("/") ||

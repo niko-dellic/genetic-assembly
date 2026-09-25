@@ -69,12 +69,6 @@ pub struct ResultMember {
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct RunResultsResponse {
-    pub run_id: Uuid,
-    pub members: Vec<ResultMember>,
-}
-
-#[derive(Clone, Debug, Serialize)]
 pub struct AnalyticsObjective {
     pub index: usize,
     pub name: String,

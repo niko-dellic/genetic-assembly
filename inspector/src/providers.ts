@@ -24,7 +24,7 @@ export type InspectorProvider = Pick<
   cancelJob(id: string): Promise<unknown>;
   runHandle(id: string): {
     status(): Promise<RunStatus>;
-    results(): Promise<{ search: unknown; validated: unknown[] }>;
+    results(): Promise<import("@genetic-assembly/sdk").LocalResults>;
     cancel(): Promise<unknown>;
   };
   resourceFetch?: typeof fetch;
@@ -66,7 +66,10 @@ export class ArchiveInspectorProvider implements InspectorProvider {
     const data = (await this.reader()).snapshot();
     const items: RunStatus[] = [];
     for (const run of data.runs)
-      if ((run.studyId ?? (await studyId(run.study))) === id)
+      if (
+        run.kind === "search" &&
+        (run.studyId ?? (await studyId(run.study))) === id
+      )
         items.push({
           id: run.id,
           status: run.status,
@@ -189,10 +192,8 @@ export class ArchiveInspectorProvider implements InspectorProvider {
           .snapshot()
           .runs.find((r) => r.id === id);
         const result = run?.results as any;
-        return {
-          search: { members: result?.search?.pareto_front ?? [] },
-          validated: result?.validatedFront ?? [],
-        };
+        if (!result?.search) throw Error("Results are not available");
+        return result;
       },
       cancel: async () => unavailable(),
     };
@@ -233,7 +234,7 @@ export class LocalInspectorProvider extends ArchiveInspectorProvider {
     return this.optimizer.replay(await this.model(id), decisions);
   }
   override async run(id: string, config: RunConfig = {}) {
-    return this.optimizer.run(await this.model(id), {
+    return await this.optimizer.run(await this.model(id), {
       populationSize: config.population_size,
       generations: config.generations,
       seed: config.seed,
@@ -244,7 +245,7 @@ export class LocalInspectorProvider extends ArchiveInspectorProvider {
     return {
       ...reader,
       status: async () => {
-        const state = this.optimizer.runHandle(id).status();
+        const state = await this.optimizer.runHandle(id).status();
         return {
           id,
           status: state.status,

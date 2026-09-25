@@ -6,8 +6,10 @@ const fixture=JSON.parse(execFileSync('cargo',['run','--release','-q','-p','gene
 const solver=await instantiateSolver(readFileSync(new URL('../sdk/dist/solver.wasm',import.meta.url)));
 solver({op:'init',problem:fixture.problem,config:fixture.config});
 const started=performance.now();
+const snapshots=[];
 for(let batch; (batch=solver({op:'ask'}));){
  solver({op:'tell',candidates:batch.map(({id,genes})=>({id,genes,evaluation:{objectives:[genes.reduce((sum,v)=>sum+v,0),(1-genes[0])**2],constraints:[genes[1]-4]}}))});
+ const snapshot=solver({op:'snapshot'});snapshots.push({generation:snapshot.generations,population:snapshot.final_population,summary:solver({op:'summary'})});
 }
 const result=solver({op:'result'});
 function comparable(actual,expected,path='result') {
@@ -16,7 +18,10 @@ function comparable(actual,expected,path='result') {
  assert.deepEqual(Object.keys(actual).sort(),Object.keys(expected).sort(),path);
  for(const key of Object.keys(expected))comparable(actual[key],expected[key],`${path}.${key}`);
 }
-comparable(result,fixture.result);
+const {checkpoint,...observation}=fixture.result;
+comparable(result,observation);
+comparable(snapshots,fixture.snapshots,"snapshots");
+assert.equal(Object.hasOwn(result,"checkpoint"),false);
 console.log(`Native/WASM mixed-variable fixture matches within 1e-12 relative/absolute tolerance; WASM execution ${(performance.now()-started).toFixed(2)} ms (40 evaluations, same seed, constraints, ranking).`);
 
 mkdirSync('artifacts',{recursive:true});

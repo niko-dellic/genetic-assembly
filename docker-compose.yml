@@ -11,7 +11,7 @@ services:
       timeout: 3s
       retries: 20
     volumes:
-      - postgres-data-v4:/var/lib/postgresql/data
+      - postgres-data-v5:/var/lib/postgresql/data
 
   server:
     build: .
@@ -31,7 +31,7 @@ services:
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
-      - artifact-data-v4:/var/lib/genetic-assembly/artifacts
+      - artifact-data-v5:/var/lib/genetic-assembly/artifacts
       - .:/workspace:ro
 
   minio:
@@ -48,6 +48,6 @@ services:
       - minio-data:/data
 
 volumes:
-  postgres-data-v4:
-  artifact-data-v4:
+  postgres-data-v5:
+  artifact-data-v5:
   minio-data:

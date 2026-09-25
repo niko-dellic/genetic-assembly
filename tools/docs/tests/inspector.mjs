@@ -45,10 +45,10 @@ try {
       validationSeeds: [2],
     },
   };
-  await page.route("**/v2/**", (route) => {
+  await page.route("**/v3/**", (route) => {
     const path = new URL(route.request().url()).pathname;
     let value = { items: [], nextOffset: null };
-    if (path === "/v2/studies")
+    if (path === "/v3/studies")
       value = { items: empty ? [] : [study], nextOffset: null };
     else if (path.endsWith("/runs") && route.request().method() === "GET")
       value = {
@@ -59,9 +59,9 @@ try {
         })),
         nextOffset: null,
       };
-    else if (path.startsWith("/v2/runs/") && path.endsWith("/results"))
-      value = { search: { members: [] }, validated: [] };
-    else if (path.startsWith("/v2/runs/")) {
+    else if (path.startsWith("/v3/runs/") && path.endsWith("/results"))
+      value = { search: { pareto_front: [] }, validated: [], validatedFront: [] };
+    else if (path.startsWith("/v3/runs/")) {
       const status = path.split("/")[3];
       value = {
         id: status,
@@ -69,7 +69,7 @@ try {
         current_generation: 1,
         error: status === "failed" ? "Deliberate model error" : null,
       };
-    } else if (path.startsWith("/v2/history/"))
+    } else if (path.startsWith("/v3/history/"))
       value = {
         items: [
           {
@@ -88,7 +88,7 @@ try {
         ],
         nextOffset: null,
       };
-    else if (path === "/v2/datasets") value = [];
+    else if (path === "/v3/datasets") value = [];
     return route.fulfill({ json: value });
   });
   await page.goto(base);
@@ -102,7 +102,7 @@ try {
   await page.getByRole("button", { name: /failed · generation/ }).click();
   await page.getByText("Run failed: Deliberate model error").waitFor();
   await page.getByRole("button", { name: /cancelled · generation/ }).click();
-  await page.getByText(/Search front: 0 candidates/).waitFor();
+  await page.getByText(/Run cancelled: completed generation history remains available/).waitFor();
   await page.getByRole("button", { name: /completed · generation/ }).click();
   await page.getByRole("button", { name: "candidate", exact: true }).click();
   await page.getByText("Selected search mean ± SD", { exact: true }).waitFor();

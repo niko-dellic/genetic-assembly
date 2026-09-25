@@ -175,19 +175,21 @@ export function mountInspector(
     }
     if (!job) {
       const status = await api.runHandle(id).status();
-      if (!["completed", "cancelled"].includes(status.status)) {
+      if (status.status !== "completed") {
         text(
           find("[data-results]"),
           status.status === "failed"
             ? `Run failed: ${status.error ?? "Inspect evaluation failures for details."}`
-            : `Run ${status.status}: results will appear after completion.`,
+            : status.status === "cancelled"
+              ? "Run cancelled: completed generation history remains available."
+              : `Run ${status.status}: results will appear after completion.`,
         );
         return;
       }
       const result = await api.runHandle(id).results();
       text(
         find("[data-results]"),
-        `Search front: ${((result.search as any).members ?? []).length} candidates. Validated front: ${result.validated.length} candidates. Validation is based only on fully evaluated finalists.`,
+        `Search front: ${((result.search as any).pareto_front ?? []).length} candidates. Validated front: ${result.validatedFront.length} candidates. Validation is based only on fully evaluated finalists.`,
       );
     } else
       text(

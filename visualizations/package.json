@@ -1,6 +1,6 @@
 {
   "name": "@genetic-assembly/visualizations",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Framework-agnostic optimization visualizations for Genetic Assembly",
   "type": "module",
   "main": "dist/index.js",
@@ -15,7 +15,8 @@
     "prepack": "node ../scripts/prepare-package.mjs visualizations"
   },
   "dependencies": {
-    "d3": "^7.9.0"
+    "d3": "^7.9.0",
+    "@genetic-assembly/sdk": "file:../sdk"
   },
   "peerDependencies": {
     "three": ">=0.170.0"

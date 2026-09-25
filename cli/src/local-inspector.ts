@@ -51,22 +51,25 @@ export async function serveLocalInspector(options: {
         const action = JSON.parse(body);
         let result: unknown;
         if (action.op === "baseline")
-          result = await options.optimizer.baseline(options.model);
+          result = await (
+            await options.optimizer.baseline(options.model)
+          ).completed();
         else if (action.op === "replay")
-          result = await options.optimizer.replay(
-            options.model,
-            action.decisions,
-          );
+          result = await (
+            await options.optimizer.replay(options.model, action.decisions)
+          ).completed();
         else if (action.op === "run")
           result = {
-            id: options.optimizer.run(options.model, {
-              populationSize: 24,
-              generations: 8,
-              seed: 42,
-            }).id,
+            id: (
+              await options.optimizer.run(options.model, {
+                populationSize: 24,
+                generations: 8,
+                seed: 42,
+              })
+            ).id,
           };
         else if (action.op === "cancel")
-          result = options.optimizer.runHandle(action.id).cancel();
+          result = await options.optimizer.runHandle(action.id).cancel();
         else throw Error("Unknown action");
         response.setHeader("content-type", "application/json");
         response.end(JSON.stringify(result ?? null));

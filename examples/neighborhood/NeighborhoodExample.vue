@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, onBeforeUnmount } from "vue";
+import EvaluationWorker from "./evaluation.worker.ts?worker";
+import SolverWorker from "../../sdk/dist/solver-browser-worker.js?worker";
 const state = ref("Ready"),
   error = ref(""),
   running = ref(false),
@@ -38,7 +40,7 @@ async function start() {
   run = undefined;
   try {
     const [
-      { Optimizer },
+      { Optimizer, defineWorkerStudy },
       { default: study },
       { mountInspector, LocalInspectorProvider },
     ] = await Promise.all([
@@ -47,17 +49,28 @@ async function start() {
       import("../../inspector/dist/index.js"),
     ]);
     if (cancelled.value) throw new DOMException("Cancelled", "AbortError");
-    optimizer = new Optimizer({ memoryLimitBytes: 64 * 1024 * 1024 });
-    model = study;
+    optimizer = new Optimizer({
+      memoryLimitBytes: 64 * 1024 * 1024,
+      solverWorkerFactory: () => new SolverWorker(),
+    });
+    model = defineWorkerStudy(study, () => new EvaluationWorker(), {
+      repair: study.repair,
+      validate: study.validate,
+      materialize: study.materialize,
+    });
     state.value = "Evaluating baseline (2 simulation seeds)…";
-    baseline.value = await optimizer.baseline(model);
+    baseline.value = await (await optimizer.baseline(model)).completed();
     canExport.value = true;
     provider = new LocalInspectorProvider(optimizer, [model]);
     inspector = mountInspector(inspectorHost.value!, {
       provider,
       onReplay: openReplay,
     });
-    run = optimizer.run(model, { populationSize: 8, generations: 2, seed: 42 });
+    run = await optimizer.run(model, {
+      populationSize: 8,
+      generations: 2,
+      seed: 42,
+    });
     const unsubscribe = run.subscribe((status: any) => {
       state.value = `${status.status} · generation ${status.progress?.generation ?? 0}`;
       if (
@@ -69,7 +82,7 @@ async function start() {
     const status = await run.wait();
     unsubscribe();
     if (status.status === "completed")
-      candidates.value = run.results().validatedFront;
+      candidates.value = (await run.results()).validatedFront;
     await inspector.refresh();
   } catch (e) {
     error.value = cancelled.value ? "" : String(e);
@@ -97,7 +110,7 @@ async function replaySelected() {
   if (!selected.value) return;
   try {
     state.value = "Generating selected replay…";
-    await optimizer.replay(model, selected.value.decisions);
+    await (await optimizer.replay(model, selected.value.decisions)).completed();
     await inspector.refresh();
     state.value = "Replay ready — select its job in the inspector";
   } catch (e) {

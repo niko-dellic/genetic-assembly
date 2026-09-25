@@ -490,7 +490,7 @@ export function defineGrabmStudy(options: GrabmStudyOptions): StudyModel {
           graph: input.graph,
           facilities: input.facilities,
           scenario: new Scenario(input.scenario),
-          execution: "worker",
+          execution: "local",
         });
         try {
           run = await simulation.run({ ...input.run, signal: context.signal });

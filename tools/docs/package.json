@@ -8,7 +8,7 @@
     "build": "npm run generate && vitepress build ../../docs",
     "test": "node tests/site.mjs && node tests/browser.mjs"
   },
-  "version": "0.4.0",
+  "version": "0.5.0",
   "devDependencies": {
     "@nikodellic/publisher-docs": "file:vendor/nikodellic-publisher-docs-0.1.1.tgz"
   }

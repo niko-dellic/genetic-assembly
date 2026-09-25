@@ -5,12 +5,12 @@ import study from "../../../examples/neighborhood/study.mjs";
 const optimizer = new Optimizer();
 const started = performance.now();
 try {
-  await optimizer.baseline(study);
-  const run = optimizer.run(study, {
+  await (await optimizer.baseline(study)).completed();
+  const run = (await optimizer.run(study, {
     populationSize: 8,
     generations: 2,
     seed: 42,
-  });
+  }));
   await run.wait();
   const expected = optimizer
     .history()

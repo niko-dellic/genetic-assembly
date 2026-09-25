@@ -722,7 +722,7 @@ dependencies = [
 
 [[package]]
 name = "genetic-assembly-adapter"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "genetic-assembly-core",
  "libc",
@@ -733,7 +733,7 @@ dependencies = [
 
 [[package]]
 name = "genetic-assembly-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rand 0.9.5",
  "rand_chacha 0.9.0",
@@ -745,7 +745,7 @@ dependencies = [
 
 [[package]]
 name = "genetic-assembly-scene"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "genetic-assembly-core",
  "glam",
@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "genetic-assembly-script"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "genetic-assembly-core",
  "genetic-assembly-scene",
@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "genetic-assembly-server"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -800,7 +800,7 @@ dependencies = [
 
 [[package]]
 name = "genetic-assembly-wasm"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "genetic-assembly-core",
  "serde",

@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline";
 
-const protocol = "genetic-assembly-adapter-v2";
+const protocol = "genetic-assembly-adapter-v3";
 const mode = process.env.GA_ADAPTER_FIXTURE_MODE ?? "normal";
 const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
 for await (const line of lines) {

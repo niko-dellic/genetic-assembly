@@ -18,7 +18,7 @@ npm run ga:inspect -- study.ga.json
 
 `ga.config.json` declares your study entry, snapshot files, project name and local port. Runtime dependencies come from the lockfile. Complete package assets and subprocess entry points survive installation.
 
-Use `ga status`, `ga logs`, `ga down`, and `ga backup DIRECTORY` for service management. `ga cleanup --delete-data` explicitly removes this project's v4 volumes. Previous development data is left intact.
+Use `ga status`, `ga logs`, `ga down`, and `ga backup DIRECTORY` for service management. `ga cleanup --delete-data` explicitly removes this project's v5 volumes. Previous development data is left intact.
 
 [Study guide](https://genetic-assembly.vercel.app/docs/quickstart.html) · [Runtime and storage](https://genetic-assembly.vercel.app/docs/backend.html)
 

@@ -10,7 +10,9 @@ mod operators;
 mod sorting;
 mod types;
 
-pub use algorithm::{RunControl, SolverSession, run_nsga2_batch, validate_problem_config};
+pub use algorithm::{
+    RunControl, SolverSession, run_nsga2_batch, summarize_generation, validate_problem_config,
+};
 pub use sorting::{constraint_dominates, fast_non_dominated_sort};
 pub use types::*;
 

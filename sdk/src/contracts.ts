@@ -1,6 +1,7 @@
+import { errorDetailSchema } from "./observation.js";
 import { z } from "zod";
-export const API_VERSION = 2 as const;
-export const ADAPTER_PROTOCOL_VERSION = "genetic-assembly-adapter-v2" as const;
+export const API_VERSION = 3 as const;
+export const ADAPTER_PROTOCOL_VERSION = "genetic-assembly-adapter-v3" as const;
 const finite = z.number().finite();
 const id = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.-]*$/);
 export const decisionSchema = z.discriminatedUnion("kind", [
@@ -39,7 +40,7 @@ export const constraintSchema = z.object({
   label: z.string().optional(),
 });
 export const studySpecSchema = z.object({
-  schemaVersion: z.literal(2).default(2),
+  schemaVersion: z.literal(3).default(3),
   name: z.string().min(1),
   version: z.string().min(1),
   inputs: z.json(),
@@ -90,6 +91,7 @@ export const evaluationSchema = z.object({
   warnings: z.array(z.string()),
   repairs: z.array(z.string()),
   error: z.string().optional(),
+  errorDetail: errorDetailSchema.optional(),
   cacheKey: z.string(),
   cached: z.boolean().default(false),
   runtimeMs: z.number().nonnegative(),
@@ -127,6 +129,7 @@ export interface RunStatus {
   status: "queued" | "running" | "completed" | "failed" | "cancelled";
   current_generation: number;
   error?: string | null;
+  errorDetail?: import("./errors.js").ErrorDetail;
   config: RunConfig;
 }
 export interface DatasetReference {
@@ -146,6 +149,7 @@ export interface Job {
   kind: "baseline" | "replay";
   status: RunStatus["status"];
   error?: string;
+  errorDetail?: import("./errors.js").ErrorDetail;
   request: { decisions: Decisions };
   result?: unknown;
 }
@@ -161,18 +165,10 @@ export function canonical(value: unknown): string {
       "{" +
       Object.entries(value)
         .filter(([, v]) => v !== undefined)
-        .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .map(([k, v]) => JSON.stringify(k) + ":" + canonical(v))
         .join(",") +
       "}"
     );
   throw new Error("Study inputs must contain only finite JSON values");
-}
-
-export interface ValidatedCandidate {
-  candidate_id: string;
-  decisions: Decisions;
-  metrics: Record<string, number>;
-  constraints: Record<string, number>;
-  seed_count: number;
 }

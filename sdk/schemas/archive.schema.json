@@ -8,7 +8,7 @@
     },
     "version": {
       "type": "number",
-      "const": 1
+      "const": 2
     },
     "createdAt": {
       "type": "string",
@@ -58,9 +58,9 @@
         "type": "object",
         "properties": {
           "schemaVersion": {
-            "default": 2,
+            "default": 3,
             "type": "number",
-            "const": 2
+            "const": 3
           },
           "name": {
             "type": "string",
@@ -321,6 +321,14 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "search",
+              "baseline",
+              "replay"
+            ]
+          },
           "engineVersion": {
             "type": "string"
           },
@@ -328,9 +336,9 @@
             "type": "object",
             "properties": {
               "schemaVersion": {
-                "default": 2,
+                "default": 3,
                 "type": "number",
-                "const": 2
+                "const": 3
               },
               "name": {
                 "type": "string",
@@ -590,14 +598,315 @@
           "error": {
             "type": "string"
           },
+          "errorDetail": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": "string"
+              },
+              "seed": {
+                "type": "number"
+              },
+              "asset": {
+                "type": "string"
+              },
+              "cause": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "stage",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sequence": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "operationId": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "phase",
+                    "evaluation-started",
+                    "evaluation-completed",
+                    "evaluation-failed",
+                    "generation-completed",
+                    "completed",
+                    "failed",
+                    "cancelled"
+                  ]
+                },
+                "phase": {
+                  "type": "string",
+                  "enum": [
+                    "baseline",
+                    "search",
+                    "validation",
+                    "replay"
+                  ]
+                },
+                "candidateId": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": "number"
+                },
+                "recordId": {
+                  "type": "string"
+                },
+                "generation": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "active": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "queued": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "stage": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "candidateId": {
+                      "type": "string"
+                    },
+                    "seed": {
+                      "type": "number"
+                    },
+                    "asset": {
+                      "type": "string"
+                    },
+                    "cause": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "stage",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "sequence",
+                "operationId",
+                "type",
+                "active",
+                "queued"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "generations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "generation": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "summary": {
+                  "type": "object",
+                  "properties": {
+                    "generation": {
+                      "type": "number"
+                    },
+                    "evaluations": {
+                      "type": "number"
+                    },
+                    "pareto_size": {
+                      "type": "number"
+                    },
+                    "feasible_count": {
+                      "type": "number"
+                    },
+                    "infeasible_count": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "generation",
+                    "evaluations",
+                    "pareto_size",
+                    "feasible_count",
+                    "infeasible_count"
+                  ],
+                  "additionalProperties": {}
+                },
+                "evaluatedCandidateIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "population": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "candidateId": {
+                        "type": "string"
+                      },
+                      "rank": {
+                        "type": "number"
+                      },
+                      "crowdingDistance": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "candidateId",
+                      "rank",
+                      "crowdingDistance"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "paretoCandidateIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "discoveredParetoCandidateIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "generation",
+                "summary",
+                "evaluatedCandidateIds",
+                "population",
+                "paretoCandidateIds",
+                "discoveredParetoCandidateIds"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "candidateId": {
+                  "type": "string"
+                },
+                "decisions": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": [
+                      "number",
+                      "boolean",
+                      "string"
+                    ]
+                  }
+                },
+                "metrics": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                },
+                "constraints": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                },
+                "seedCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "feasible": {
+                  "type": "boolean"
+                },
+                "phase": {
+                  "type": "string",
+                  "enum": [
+                    "baseline",
+                    "search",
+                    "validation",
+                    "replay"
+                  ]
+                }
+              },
+              "required": [
+                "candidateId",
+                "decisions",
+                "metrics",
+                "constraints",
+                "seedCount",
+                "feasible",
+                "phase"
+              ],
+              "additionalProperties": false
+            }
+          },
           "results": {
             "$ref": "#/$defs/__schema1"
           }
         },
         "required": [
           "id",
+          "kind",
           "study",
-          "status"
+          "status",
+          "events",
+          "generations",
+          "candidates"
         ],
         "additionalProperties": false
       }
@@ -691,6 +1000,38 @@
           },
           "error": {
             "type": "string"
+          },
+          "errorDetail": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": "string"
+              },
+              "seed": {
+                "type": "number"
+              },
+              "asset": {
+                "type": "string"
+              },
+              "cause": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "stage",
+              "message"
+            ],
+            "additionalProperties": false
           },
           "cacheKey": {
             "type": "string"

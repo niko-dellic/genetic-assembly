@@ -3,7 +3,7 @@
 Optional scene export and explicit candidate previews for study-based optimization.
 
 ```sh
-npm install /path/to/artifacts/genetic-assembly-three-0.4.0.tgz three
+npm install /path/to/artifacts/genetic-assembly-three-0.5.0.tgz three
 ```
 
 Use `@genetic-assembly/sdk` to define and run a study. `previewDecisions(scene, decisions, bindings)` maps its named decisions to scene properties and returns a `CandidatePreview` with `revert()`. Nothing applies a design to your application automatically.
